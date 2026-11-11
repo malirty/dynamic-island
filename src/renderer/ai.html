@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: file:; style-src 'self' 'unsafe-inline'; script-src 'self'; media-src 'self' blob: mediastream:">
+  <title>Island · ИИ</title>
+  <link rel="stylesheet" href="css/island.css">
+  <link rel="stylesheet" href="css/pages.css">
+  <style>
+    html, body { background: transparent; }
+    .win { position: fixed; inset: 8px; border-radius: 26px; overflow: hidden; background: var(--base); box-shadow: 0 0 0 1px var(--line), 0 20px 60px -20px rgba(0,0,0,.7), 0 0 40px -20px var(--c1); display: flex; flex-direction: column; isolation: isolate; }
+    .win .ib { z-index: -1; }
+    .wbar { display: flex; align-items: center; gap: 8px; padding: 12px 14px 4px; -webkit-app-region: drag; font-weight: 700; font-size: 13px; }
+    .wbar button { -webkit-app-region: no-drag; }
+    .wbody { flex: 1; min-height: 0; padding: 4px 14px 14px; }
+  </style>
+</head>
+<body>
+  <div class="win">
+    <div class="ib"><div class="flow"></div><div class="liquid"><i></i><i></i><i></i></div><div class="glassrim"></div></div>
+    <div class="wbar"><span>✦ Island · ИИ</span><div style="flex:1"></div><button class="ibtn" id="min">—</button><button class="ibtn" id="close">✕</button></div>
+    <div class="wbody"><div id="chat" style="height:100%"></div></div>
+  </div>
+  <script type="module" src="js/ai-window.js"></script>
+</body>
+</html>

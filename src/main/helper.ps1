@@ -1,0 +1,493 @@
+# Island system bridge. Reads one JSON command per line from stdin, writes one JSON reply per line.
+# Keep this file ASCII-only: Windows PowerShell 5.1 reads BOM-less scripts as ANSI.
+$ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+
+$csharp = @'
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
+
+public static class IslandNative {
+    [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
+    [StructLayout(LayoutKind.Sequential)] public struct MONITORINFO { public int cbSize; public RECT rcMonitor; public RECT rcWork; public uint dwFlags; }
+
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out RECT r);
+    [DllImport("user32.dll")] static extern IntPtr MonitorFromWindow(IntPtr h, uint flags);
+    [DllImport("user32.dll")] static extern bool GetMonitorInfo(IntPtr m, ref MONITORINFO mi);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
+    [DllImport("user32.dll")] static extern bool BringWindowToTop(IntPtr h);
+    [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
+    [DllImport("user32.dll")] static extern bool IsIconic(IntPtr h);
+    [DllImport("user32.dll")] static extern bool IsWindow(IntPtr h);
+    [DllImport("user32.dll")] static extern bool AttachThreadInput(uint a, uint b, bool attach);
+    [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
+    [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+    [DllImport("user32.dll")] static extern bool SetProcessDPIAware();
+    [DllImport("user32.dll")] static extern short GetAsyncKeyState(int vk);
+    [DllImport("user32.dll")] static extern uint GetClipboardSequenceNumber();
+
+    static Dictionary<uint, string[]> procCache = new Dictionary<uint, string[]>();
+
+    public static void Init() { try { SetProcessDPIAware(); } catch { } }
+
+    static string[] ProcInfo(uint pid) {
+        string[] v;
+        if (procCache.TryGetValue(pid, out v)) return v;
+        string name = "", desc = "", path = "";
+        try {
+            Process p = Process.GetProcessById((int)pid);
+            name = p.ProcessName;
+            try { path = p.MainModule.FileName; desc = p.MainModule.FileVersionInfo.FileDescription ?? ""; } catch { }
+        } catch { }
+        v = new string[] { name, desc, path };
+        if (procCache.Count > 400) procCache.Clear();
+        procCache[pid] = v;
+        return v;
+    }
+
+    // returns: hwnd, pid, process, description, title, class, fullscreen(0/1), exe path
+    public static string[] Foreground() {
+        IntPtr h = GetForegroundWindow();
+        StringBuilder t = new StringBuilder(512); GetWindowText(h, t, 512);
+        StringBuilder c = new StringBuilder(256); GetClassName(h, c, 256);
+        uint pid; GetWindowThreadProcessId(h, out pid);
+        string[] pi = ProcInfo(pid);
+        bool full = false;
+        string cls = c.ToString();
+        if (h != IntPtr.Zero && cls != "Progman" && cls != "WorkerW" && cls != "Shell_TrayWnd") {
+            RECT r; GetWindowRect(h, out r);
+            MONITORINFO mi = new MONITORINFO(); mi.cbSize = Marshal.SizeOf(typeof(MONITORINFO));
+            if (GetMonitorInfo(MonitorFromWindow(h, 2), ref mi)) {
+                full = r.Left <= mi.rcMonitor.Left && r.Top <= mi.rcMonitor.Top && r.Right >= mi.rcMonitor.Right && r.Bottom >= mi.rcMonitor.Bottom;
+            }
+        }
+        return new string[] { h.ToInt64().ToString(), pid.ToString(), pi[0], pi[1], t.ToString(), cls, full ? "1" : "0", pi[2], GetClipboardSequenceNumber().ToString() };
+    }
+
+    public static bool Focus(long hwnd) {
+        IntPtr h = new IntPtr(hwnd);
+        if (h == IntPtr.Zero || !IsWindow(h)) return false;
+        uint dummy;
+        uint fg = GetWindowThreadProcessId(GetForegroundWindow(), out dummy);
+        uint cur = GetCurrentThreadId();
+        // A short Alt tap lets this process take foreground rights.
+        keybd_event(0x12, 0, 0, UIntPtr.Zero); keybd_event(0x12, 0, 2, UIntPtr.Zero);
+        AttachThreadInput(fg, cur, true);
+        if (IsIconic(h)) ShowWindow(h, 9);
+        BringWindowToTop(h);
+        bool ok = SetForegroundWindow(h);
+        AttachThreadInput(fg, cur, false);
+        return ok;
+    }
+
+    public static void Combo(int[] vks) {
+        foreach (int k in vks) keybd_event((byte)k, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(15);
+        for (int i = vks.Length - 1; i >= 0; i--) keybd_event((byte)vks[i], 0, 2, UIntPtr.Zero);
+    }
+
+    public static bool Paste(long hwnd) {
+        bool ok = true;
+        if (hwnd != 0) { ok = Focus(hwnd); Thread.Sleep(90); }
+        // release modifiers the user may still hold
+        int[] mods = new int[] { 0x10, 0x11, 0x12, 0x5B, 0x5C };
+        foreach (int m in mods) if ((GetAsyncKeyState(m) & 0x8000) != 0) keybd_event((byte)m, 0, 2, UIntPtr.Zero);
+        Combo(new int[] { 0x11, 0x56 });
+        return ok;
+    }
+}
+
+public static class IslandAudio {
+    [ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")] class MMDeviceEnumeratorCo { }
+
+    [Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IMMDeviceEnumerator {
+        [PreserveSig] int EnumAudioEndpoints(int flow, int mask, out IntPtr devices);
+        [PreserveSig] int GetDefaultAudioEndpoint(int flow, int role, out IMMDevice dev);
+    }
+    [Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IMMDevice {
+        [PreserveSig] int Activate(ref Guid iid, int ctx, IntPtr p, [MarshalAs(UnmanagedType.IUnknown)] out object o);
+    }
+    [Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IAudioEndpointVolume {
+        [PreserveSig] int RegisterControlChangeNotify(IntPtr p);
+        [PreserveSig] int UnregisterControlChangeNotify(IntPtr p);
+        [PreserveSig] int GetChannelCount(out uint c);
+        [PreserveSig] int SetMasterVolumeLevel(float l, ref Guid g);
+        [PreserveSig] int SetMasterVolumeLevelScalar(float l, ref Guid g);
+        [PreserveSig] int GetMasterVolumeLevel(out float l);
+        [PreserveSig] int GetMasterVolumeLevelScalar(out float l);
+        [PreserveSig] int SetChannelVolumeLevel(uint ch, float l, ref Guid g);
+        [PreserveSig] int SetChannelVolumeLevelScalar(uint ch, float l, ref Guid g);
+        [PreserveSig] int GetChannelVolumeLevel(uint ch, out float l);
+        [PreserveSig] int GetChannelVolumeLevelScalar(uint ch, out float l);
+        [PreserveSig] int SetMute([MarshalAs(UnmanagedType.Bool)] bool m, ref Guid g);
+        [PreserveSig] int GetMute([MarshalAs(UnmanagedType.Bool)] out bool m);
+    }
+    [Guid("77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IAudioSessionManager2 {
+        [PreserveSig] int GetAudioSessionControl(IntPtr a, int b, out IntPtr c);
+        [PreserveSig] int GetSimpleAudioVolume(IntPtr a, int b, out IntPtr c);
+        [PreserveSig] int GetSessionEnumerator(out IAudioSessionEnumerator e);
+    }
+    [Guid("E2F5BB11-0570-40CA-ACDD-3AA01277DEE8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IAudioSessionEnumerator {
+        [PreserveSig] int GetCount(out int n);
+        [PreserveSig] int GetSession(int i, out IAudioSessionControl2 s);
+    }
+    [Guid("bfb7ff88-7239-4fc9-8fa2-07c950be9c6d"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IAudioSessionControl2 {
+        [PreserveSig] int GetState(out int s);
+        [PreserveSig] int GetDisplayName(out IntPtr n);
+        [PreserveSig] int SetDisplayName(IntPtr a, IntPtr b);
+        [PreserveSig] int GetIconPath(out IntPtr a);
+        [PreserveSig] int SetIconPath(IntPtr a, IntPtr b);
+        [PreserveSig] int GetGroupingParam(out Guid a);
+        [PreserveSig] int SetGroupingParam(IntPtr a, IntPtr b);
+        [PreserveSig] int RegisterAudioSessionNotification(IntPtr a);
+        [PreserveSig] int UnregisterAudioSessionNotification(IntPtr a);
+        [PreserveSig] int GetSessionIdentifier(out IntPtr a);
+        [PreserveSig] int GetSessionInstanceIdentifier(out IntPtr a);
+        [PreserveSig] int GetProcessId(out uint pid);
+    }
+    [Guid("87CE5498-68D6-44E5-9215-6DA47EF883D8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface ISimpleAudioVolume {
+        [PreserveSig] int SetMasterVolume(float l, ref Guid g);
+        [PreserveSig] int GetMasterVolume(out float l);
+        [PreserveSig] int SetMute([MarshalAs(UnmanagedType.Bool)] bool m, ref Guid g);
+        [PreserveSig] int GetMute([MarshalAs(UnmanagedType.Bool)] out bool m);
+    }
+
+    static IMMDevice Speakers() {
+        IMMDeviceEnumerator en = (IMMDeviceEnumerator)(new MMDeviceEnumeratorCo());
+        IMMDevice dev; Marshal.ThrowExceptionForHR(en.GetDefaultAudioEndpoint(0, 1, out dev));
+        return dev;
+    }
+    static IAudioEndpointVolume Endpoint() {
+        Guid iid = typeof(IAudioEndpointVolume).GUID; object o;
+        Marshal.ThrowExceptionForHR(Speakers().Activate(ref iid, 23, IntPtr.Zero, out o));
+        return (IAudioEndpointVolume)o;
+    }
+    public static float GetMaster() { float v; Endpoint().GetMasterVolumeLevelScalar(out v); return v; }
+    public static void SetMaster(float v) { Guid g = Guid.Empty; Endpoint().SetMasterVolumeLevelScalar(Math.Max(0f, Math.Min(1f, v)), ref g); }
+    public static bool GetMute() { bool m; Endpoint().GetMute(out m); return m; }
+    public static void SetMute(bool m) { Guid g = Guid.Empty; Endpoint().SetMute(m, ref g); }
+
+    // Each entry: pid|process|volume|muted
+    public static string[] Sessions() {
+        List<string> res = new List<string>();
+        Guid iid = typeof(IAudioSessionManager2).GUID; object o;
+        Marshal.ThrowExceptionForHR(Speakers().Activate(ref iid, 23, IntPtr.Zero, out o));
+        IAudioSessionManager2 mgr = (IAudioSessionManager2)o;
+        IAudioSessionEnumerator en; mgr.GetSessionEnumerator(out en);
+        int n; en.GetCount(out n);
+        for (int i = 0; i < n; i++) {
+            IAudioSessionControl2 s; en.GetSession(i, out s);
+            uint pid; s.GetProcessId(out pid);
+            if (pid == 0) continue;
+            string name = "";
+            try { name = Process.GetProcessById((int)pid).ProcessName; } catch { }
+            ISimpleAudioVolume vol = (ISimpleAudioVolume)s;
+            float v; vol.GetMasterVolume(out v); bool m; vol.GetMute(out m);
+            res.Add(pid + "|" + name + "|" + v.ToString(System.Globalization.CultureInfo.InvariantCulture) + "|" + (m ? 1 : 0));
+        }
+        return res.ToArray();
+    }
+
+    public static int SetAppVolume(string match, float level) {
+        int count = 0; match = match.ToLowerInvariant();
+        Guid iid = typeof(IAudioSessionManager2).GUID; object o;
+        Marshal.ThrowExceptionForHR(Speakers().Activate(ref iid, 23, IntPtr.Zero, out o));
+        IAudioSessionManager2 mgr = (IAudioSessionManager2)o;
+        IAudioSessionEnumerator en; mgr.GetSessionEnumerator(out en);
+        int n; en.GetCount(out n);
+        for (int i = 0; i < n; i++) {
+            IAudioSessionControl2 s; en.GetSession(i, out s);
+            uint pid; s.GetProcessId(out pid);
+            if (pid == 0) continue;
+            string name = "";
+            try { name = Process.GetProcessById((int)pid).ProcessName.ToLowerInvariant(); } catch { }
+            if (name.Length == 0 || !(name.Contains(match) || match.Contains(name))) continue;
+            Guid g = Guid.Empty;
+            ((ISimpleAudioVolume)s).SetMasterVolume(Math.Max(0f, Math.Min(1f, level)), ref g);
+            count++;
+        }
+        return count;
+    }
+}
+
+public static class IslandToasts {
+    [DllImport("winsqlite3.dll")] static extern int sqlite3_open_v2(byte[] file, out IntPtr db, int flags, IntPtr vfs);
+    [DllImport("winsqlite3.dll")] static extern int sqlite3_prepare_v2(IntPtr db, byte[] sql, int n, out IntPtr stmt, IntPtr tail);
+    [DllImport("winsqlite3.dll")] static extern int sqlite3_bind_int64(IntPtr stmt, int i, long v);
+    [DllImport("winsqlite3.dll")] static extern int sqlite3_step(IntPtr stmt);
+    [DllImport("winsqlite3.dll")] static extern long sqlite3_column_int64(IntPtr stmt, int c);
+    [DllImport("winsqlite3.dll")] static extern IntPtr sqlite3_column_blob(IntPtr stmt, int c);
+    [DllImport("winsqlite3.dll")] static extern int sqlite3_column_bytes(IntPtr stmt, int c);
+    [DllImport("winsqlite3.dll")] static extern int sqlite3_finalize(IntPtr stmt);
+    [DllImport("winsqlite3.dll")] static extern int sqlite3_close(IntPtr db);
+
+    static byte[] Z(string s) { return Encoding.UTF8.GetBytes(s + "\0"); }
+    static string Col(IntPtr st, int c) {
+        int n = sqlite3_column_bytes(st, c); IntPtr p = sqlite3_column_blob(st, c);
+        if (n <= 0 || p == IntPtr.Zero) return "";
+        byte[] b = new byte[n]; Marshal.Copy(p, b, 0, n); return Encoding.UTF8.GetString(b);
+    }
+
+    // Each entry: id \u001f arrival(filetime) \u001f appId \u001f payload xml
+    public static string[] Since(string path, long lastId) {
+        List<string> res = new List<string>();
+        IntPtr db;
+        if (sqlite3_open_v2(Z(path), out db, 1, IntPtr.Zero) != 0) { sqlite3_close(db); throw new Exception("cannot open notification db"); }
+        try {
+            IntPtr st;
+            string sql = "SELECT n.Id, n.ArrivalTime, h.PrimaryId, n.Payload FROM Notification n JOIN NotificationHandler h ON n.HandlerId = h.RecordId WHERE n.Id > ?1 AND n.Type = 'toast' ORDER BY n.Id DESC LIMIT 30";
+            if (sqlite3_prepare_v2(db, Z(sql), -1, out st, IntPtr.Zero) != 0) throw new Exception("prepare failed");
+            sqlite3_bind_int64(st, 1, lastId);
+            while (sqlite3_step(st) == 100) {
+                res.Add(sqlite3_column_int64(st, 0) + "\u001f" + sqlite3_column_int64(st, 1) + "\u001f" + Col(st, 2) + "\u001f" + Col(st, 3));
+            }
+            sqlite3_finalize(st);
+        } finally { sqlite3_close(db); }
+        return res.ToArray();
+    }
+}
+'@
+
+Add-Type -TypeDefinition $csharp -Language CSharp
+[IslandNative]::Init()
+
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
+$script:asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
+    $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1'
+})[0]
+function Await($op, [Type]$type) {
+    $t = $script:asTaskGeneric.MakeGenericMethod($type).Invoke($null, @($op))
+    $null = $t.Wait(-1)
+    $t.Result
+}
+
+$script:mediaReady = $false
+function Get-MediaManager {
+    if (-not $script:mediaReady) {
+        $null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType = WindowsRuntime]
+        $script:mediaMgr = Await ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
+        $script:mediaReady = $true
+    }
+    $script:mediaMgr
+}
+
+function Get-MediaSession {
+    $mgr = Get-MediaManager
+    $cur = $mgr.GetCurrentSession()
+    # Prefer a session that is actually playing.
+    foreach ($s in $mgr.GetSessions()) {
+        if ($s.GetPlaybackInfo().PlaybackStatus -eq 'Playing') { return $s }
+    }
+    $cur
+}
+
+function Cmd-Media($a) {
+    $s = Get-MediaSession
+    if (-not $s) { return @{ active = $false } }
+    $p = Await ($s.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
+    $pb = $s.GetPlaybackInfo()
+    $tl = $s.GetTimelineProperties()
+    $r = @{
+        active   = $true
+        app      = $s.SourceAppUserModelId
+        title    = $p.Title
+        artist   = $p.Artist
+        album    = $p.AlbumTitle
+        status   = [string]$pb.PlaybackStatus
+        position = $tl.Position.TotalSeconds
+        duration = $tl.EndTime.TotalSeconds
+        updated  = $tl.LastUpdatedTime.ToUnixTimeMilliseconds()
+        canSeek  = $pb.Controls.IsPlaybackPositionEnabled
+    }
+    if ($a.thumb -and $p.Thumbnail) {
+        try {
+            $ras = Await ($p.Thumbnail.OpenReadAsync()) ([Windows.Storage.Streams.IRandomAccessStreamWithContentType])
+            $st = [System.IO.WindowsRuntimeStreamExtensions]::AsStreamForRead($ras)
+            $ms = New-Object System.IO.MemoryStream
+            $st.CopyTo($ms); $st.Dispose()
+            $r.thumb = [Convert]::ToBase64String($ms.ToArray())
+        } catch { $r.thumbError = $_.Exception.Message }
+    }
+    $r
+}
+
+function Cmd-MediaCmd($a) {
+    $s = Get-MediaSession
+    if (-not $s) {
+        $vk = @{ toggle = 0xB3; play = 0xB3; pause = 0xB3; next = 0xB0; prev = 0xB1 }[$a.action]
+        if ($vk) { [IslandNative]::Combo(@($vk)) }
+        return @{ fallback = $true }
+    }
+    switch ($a.action) {
+        'toggle' { $op = $s.TryTogglePlayPauseAsync() }
+        'play' { $op = $s.TryPlayAsync() }
+        'pause' { $op = $s.TryPauseAsync() }
+        'next' { $op = $s.TrySkipNextAsync() }
+        'prev' { $op = $s.TrySkipPreviousAsync() }
+        'seek' { $op = $s.TryChangePlaybackPositionAsync([long]([double]$a.position * 10000000)) }
+    }
+    @{ ok = (Await $op ([bool])) }
+}
+
+function Cmd-Ocr($a) {
+    $null = [Windows.Storage.StorageFile, Windows.Storage, ContentType = WindowsRuntime]
+    $null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsRuntime]
+    $null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Graphics, ContentType = WindowsRuntime]
+    $file = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($a.path)) ([Windows.Storage.StorageFile])
+    $stream = Await ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])
+    $dec = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
+    $bmp = Await ($dec.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
+    $engine = $null
+    if ($a.lang) {
+        $null = [Windows.Globalization.Language, Windows.Globalization, ContentType = WindowsRuntime]
+        $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage((New-Object Windows.Globalization.Language($a.lang)))
+    }
+    if (-not $engine) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages() }
+    if (-not $engine) { throw 'OCR engine unavailable' }
+    $res = Await ($engine.RecognizeAsync($bmp)) ([Windows.Media.Ocr.OcrResult])
+    $stream.Dispose()
+    @{ text = (($res.Lines | ForEach-Object { $_.Text }) -join "`n"); lang = $engine.RecognizerLanguage.LanguageTag }
+}
+
+function Get-Radios {
+    $null = [Windows.Devices.Radios.Radio, Windows.System.Devices, ContentType = WindowsRuntime]
+    $null = Await ([Windows.Devices.Radios.Radio]::RequestAccessAsync()) ([Windows.Devices.Radios.RadioAccessStatus])
+    Await ([Windows.Devices.Radios.Radio]::GetRadiosAsync()) ([System.Collections.Generic.IReadOnlyList[Windows.Devices.Radios.Radio]])
+}
+
+function Cmd-Radios($a) {
+    @(Get-Radios | ForEach-Object { @{ kind = [string]$_.Kind; name = $_.Name; state = [string]$_.State } })
+}
+
+function Cmd-SetRadio($a) {
+    $r = Get-Radios | Where-Object { [string]$_.Kind -eq $a.kind } | Select-Object -First 1
+    if (-not $r) { throw "radio not found: $($a.kind)" }
+    $state = if ($a.on) { [Windows.Devices.Radios.RadioState]::On } else { [Windows.Devices.Radios.RadioState]::Off }
+    @{ result = [string](Await ($r.SetStateAsync($state)) ([Windows.Devices.Radios.RadioAccessStatus])) }
+}
+
+function Cmd-BtDevices($a) {
+    $null = [Windows.Devices.Enumeration.DeviceInformation, Windows.Devices.Enumeration, ContentType = WindowsRuntime]
+    $null = [Windows.Devices.Bluetooth.BluetoothDevice, Windows.Devices.Bluetooth, ContentType = WindowsRuntime]
+    $sel = [Windows.Devices.Bluetooth.BluetoothDevice]::GetDeviceSelectorFromPairingState($true)
+    $list = Await ([Windows.Devices.Enumeration.DeviceInformation]::FindAllAsync($sel)) ([Windows.Devices.Enumeration.DeviceInformationCollection])
+    $out = @()
+    foreach ($d in $list) {
+        $connected = $false; $kind = ''
+        try {
+            $bt = Await ([Windows.Devices.Bluetooth.BluetoothDevice]::FromIdAsync($d.Id)) ([Windows.Devices.Bluetooth.BluetoothDevice])
+            if ($bt) { $connected = ([string]$bt.ConnectionStatus) -eq 'Connected'; $kind = [string]$bt.ClassOfDevice.MajorClass; $bt.Dispose() }
+        } catch { }
+        $out += @{ id = $d.Id; name = $d.Name; connected = $connected; kind = $kind }
+    }
+    $out
+}
+
+function Cmd-SearchFiles($a) {
+    $q = ([string]$a.q).Replace("'", "''")
+    $limit = if ($a.limit) { [int]$a.limit } else { 12 }
+    $conn = New-Object -ComObject ADODB.Connection
+    $rs = New-Object -ComObject ADODB.Recordset
+    $conn.Open("Provider=Search.CollatorDSO;Extended Properties='Application=Windows';")
+    $sql = "SELECT TOP $limit System.ItemUrl, System.ItemName, System.DateModified FROM SYSTEMINDEX WHERE System.FileName LIKE '%$q%' AND System.ItemType <> 'Directory' ORDER BY System.DateModified DESC"
+    $rs.Open($sql, $conn)
+    $out = @()
+    while (-not $rs.EOF) {
+        $out += @{ path = ([string]$rs.Fields.Item('System.ItemUrl').Value -replace '^file:', '').Replace('/', '\'); name = [string]$rs.Fields.Item('System.ItemName').Value }
+        $rs.MoveNext()
+    }
+    $rs.Close(); $conn.Close()
+    $out
+}
+
+function Cmd-Toasts($a) {
+    $rows = [IslandToasts]::Since($a.db, [long]$a.last)
+    @($rows | ForEach-Object {
+        $p = $_ -split [char]0x1f, 4
+        @{ id = [long]$p[0]; arrival = [long]$p[1]; app = $p[2]; xml = $p[3] }
+    })
+}
+
+function Cmd-Brightness($a) {
+    $b = Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightness -ErrorAction Stop | Select-Object -First 1
+    @{ level = $b.CurrentBrightness }
+}
+function Cmd-SetBrightness($a) {
+    $m = Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightnessMethods -ErrorAction Stop | Select-Object -First 1
+    $null = Invoke-CimMethod -InputObject $m -MethodName WmiSetBrightness -Arguments @{ Timeout = 0; Brightness = [byte]$a.level }
+    @{ ok = $true }
+}
+
+function Cmd-Vpn($a) {
+    @(Get-VpnConnection -ErrorAction SilentlyContinue | ForEach-Object { @{ name = $_.Name; status = [string]$_.ConnectionStatus; server = $_.ServerAddress } })
+}
+
+function Cmd-StartApps($a) {
+    @(Get-StartApps | ForEach-Object { @{ name = $_.Name; id = $_.AppID } })
+}
+
+function Dispatch($c, $a) {
+    switch ($c) {
+        'ping' { return @{ pong = $true } }
+        'fg' {
+            $f = [IslandNative]::Foreground()
+            return @{ hwnd = $f[0]; pid = [int]$f[1]; process = $f[2]; app = $f[3]; title = $f[4]; cls = $f[5]; fullscreen = ($f[6] -eq '1'); exe = $f[7]; clipSeq = [long]$f[8] }
+        }
+        'focus' { return @{ ok = [IslandNative]::Focus([long]$a.hwnd) } }
+        'paste' { return @{ ok = [IslandNative]::Paste([long]$a.hwnd) } }
+        'keys' { [IslandNative]::Combo([int[]]$a.vks); return @{ ok = $true } }
+        'media' { return Cmd-Media $a }
+        'mediaCmd' { return Cmd-MediaCmd $a }
+        'sessions' { return @([IslandAudio]::Sessions() | ForEach-Object { $p = $_ -split '\|'; @{ pid = [int]$p[0]; name = $p[1]; volume = [double]$p[2]; muted = ($p[3] -eq '1') } }) }
+        'setAppVolume' { return @{ count = [IslandAudio]::SetAppVolume([string]$a.match, [float]$a.level) } }
+        'volume' { return @{ level = [IslandAudio]::GetMaster(); muted = [IslandAudio]::GetMute() } }
+        'setVolume' { [IslandAudio]::SetMaster([float]$a.level); return @{ ok = $true } }
+        'setMute' { [IslandAudio]::SetMute([bool]$a.on); return @{ ok = $true } }
+        'ocr' { return Cmd-Ocr $a }
+        'radios' { return Cmd-Radios $a }
+        'setRadio' { return Cmd-SetRadio $a }
+        'btDevices' { return Cmd-BtDevices $a }
+        'searchFiles' { return Cmd-SearchFiles $a }
+        'toasts' { return Cmd-Toasts $a }
+        'brightness' { return Cmd-Brightness $a }
+        'setBrightness' { return Cmd-SetBrightness $a }
+        'vpn' { return Cmd-Vpn $a }
+        'startApps' { return Cmd-StartApps $a }
+        default { throw "unknown command: $c" }
+    }
+}
+
+[Console]::Out.WriteLine('{"ready":true}')
+[Console]::Out.Flush()
+
+while ($true) {
+    $line = [Console]::In.ReadLine()
+    if ($null -eq $line) { break }
+    if ($line.Trim().Length -eq 0) { continue }
+    $id = $null
+    try {
+        $msg = $line | ConvertFrom-Json
+        $id = $msg.id
+        $data = Dispatch $msg.cmd $msg.args
+        $out = @{ id = $id; ok = $true; data = $data } | ConvertTo-Json -Compress -Depth 8
+    } catch {
+        $out = @{ id = $id; ok = $false; error = $_.Exception.Message } | ConvertTo-Json -Compress -Depth 4
+    }
+    [Console]::Out.WriteLine($out)
+    [Console]::Out.Flush()
+}

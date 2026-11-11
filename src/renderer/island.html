@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: file:; style-src 'self' 'unsafe-inline'; script-src 'self'; media-src 'self' blob: mediastream:; connect-src 'self' data:">
+  <title>Island</title>
+  <link rel="stylesheet" href="css/island.css">
+  <link rel="stylesheet" href="css/pages.css">
+</head>
+<body>
+  <div id="stage">
+    <div id="island" data-view="compact">
+      <canvas id="edge"></canvas>
+      <div class="ib">
+        <div class="flow"></div>
+        <div class="liquid"><i></i><i></i><i></i></div>
+        <div class="glassrim"></div>
+        <div class="sheen"></div>
+      </div>
+      <div class="view v-compact"></div>
+      <div class="view v-mini"></div>
+      <div class="view v-toast"></div>
+      <div class="view v-ask"></div>
+      <div class="view v-drop">
+        <div class="dz" data-zone="shelf"></div>
+        <div class="dz" data-zone="ai"></div>
+      </div>
+      <div class="view v-palette">
+        <div class="pin-input"></div>
+        <div class="results"></div>
+      </div>
+      <div class="view v-open">
+        <div class="ohead"><nav class="tabs"></nav><div class="sp"></div><div class="hbtns row"></div></div>
+        <div class="pages"></div>
+      </div>
+    </div>
+    <div id="bubble"></div>
+    <div class="buddies">
+      <div class="buddy l"><div class="eyes"><div class="eye"><div class="pu"></div></div><div class="eye"><div class="pu"></div></div></div></div>
+      <div class="buddy r"><div class="eyes"><div class="eye"><div class="pu"></div></div><div class="eye"><div class="pu"></div></div></div></div>
+    </div>
+    <div id="flash"></div>
+  </div>
+  <script type="module" src="js/island.js"></script>
+</body>
+</html>

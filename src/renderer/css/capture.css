@@ -1,0 +1,24 @@
+:root { --c1: #7c5cff; --c2: #00d4ff; --fg: #f5f5f7; --base: rgba(14, 14, 20, .92); --spring: cubic-bezier(.32, 1.32, .42, 1); }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #000; cursor: crosshair; font-family: 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif; color: var(--fg); user-select: none; }
+canvas#base, canvas#draw { position: fixed; inset: 0; width: 100vw; height: 100vh; }
+#sel { position: fixed; display: none; box-shadow: 0 0 0 99999px rgba(0, 0, 0, .45); outline: 1.5px solid rgba(255, 255, 255, .9); border-radius: 2px; pointer-events: none; }
+#sel::before { content: ''; position: absolute; inset: -2px; border: 2px solid transparent; border-image: linear-gradient(120deg, var(--c1), var(--c2)) 1; opacity: .9; }
+#sel .size { position: absolute; left: 0; top: -26px; font-size: 11px; font-weight: 600; background: var(--base); padding: 3px 8px; border-radius: 8px; white-space: nowrap; }
+body.dim::after { content: ''; position: fixed; inset: 0; background: rgba(0, 0, 0, .3); pointer-events: none; }
+body.selecting::after, body.editing::after { display: none; }
+#hintbar { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); background: var(--base); padding: 9px 16px; border-radius: 18px; font-size: 13px; font-weight: 600; box-shadow: 0 0 30px -8px var(--c1); pointer-events: none; transition: opacity .3s; }
+#tools { position: fixed; display: none; gap: 2px; padding: 5px; background: var(--base); border-radius: 16px; box-shadow: 0 10px 40px -10px rgba(0,0,0,.6), 0 0 24px -10px var(--c1); align-items: center; animation: pop .35s var(--spring); cursor: default; }
+@keyframes pop { from { transform: scale(.85) translateY(-6px); opacity: 0; } }
+#tools button { width: 34px; height: 34px; border-radius: 11px; border: 0; background: none; color: var(--fg); display: grid; place-items: center; cursor: pointer; transition: background .15s, transform .2s var(--spring); font: inherit; font-size: 12px; font-weight: 600; }
+#tools button.wide { width: auto; padding: 0 10px; }
+#tools button:hover { background: rgba(255,255,255,.1); transform: scale(1.06); }
+#tools button.on { background: linear-gradient(135deg, var(--c1), var(--c2)); color: #fff; }
+#tools button.pri { background: #fff; color: #111; width: auto; padding: 0 12px; }
+#tools .sep { width: 1px; height: 22px; background: rgba(255,255,255,.12); margin: 0 4px; }
+#tools input[type=color] { width: 26px; height: 26px; border: 0; padding: 0; background: none; border-radius: 8px; cursor: pointer; }
+#loupe { position: fixed; display: none; pointer-events: none; width: 132px; border-radius: 18px; overflow: hidden; background: var(--base); box-shadow: 0 10px 30px rgba(0,0,0,.5), 0 0 0 2px rgba(255,255,255,.2); }
+#loupe canvas { display: block; image-rendering: pixelated; }
+#loupe .hex { text-align: center; font-size: 12px; font-weight: 700; padding: 6px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+#loupe .hex i { width: 12px; height: 12px; border-radius: 4px; display: inline-block; }
+.txtin { position: fixed; background: rgba(0,0,0,.4); border: 1px dashed #fff; color: #fff; font: 600 20px 'Segoe UI', sans-serif; outline: none; padding: 2px 4px; min-width: 60px; }
