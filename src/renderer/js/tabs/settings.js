@@ -85,7 +85,7 @@ const PREVIEW = {
     const content = ch === 'none' ? '<span class="d">ср, 11</span><span>10:42</span>' : undefined;
     const after = ch === 'buddies' ? `<div class="mpbud"><i>${eyesMini('b')}</i><i>${eyesMini('b')}</i></div>` : '';
     // every emotion the eyes can show, live (they animate here too)
-    const emo = [['', 'спокоен'], ['e-sleepy', 'сонный'], ['e-sleep', 'спит'], ['e-angry', 'злится'], ['e-shy', 'смущается'], ['e-busy', 'занят'], ['e-think', 'думает'], ['e-idea', 'придумал'], ['e-ponder', 'размышляет'], ['e-sad', 'грустит'], ['e-joy', 'радуется'], ['e-dance', 'танцует'], ['e-startle', 'удивлён']];
+    const emo = [['', 'спокоен'], ['e-sleepy', 'сонный'], ['e-sleep', 'спит'], ['e-angry', 'злится'], ['e-shy', 'смущается'], ['e-busy', 'занят'], ['e-think', 'думает'], ['e-idea', 'придумал'], ['e-ponder', 'размышляет'], ['e-sad', 'грустит'], ['e-love', 'влюблён'], ['e-laugh', 'смеётся'], ['e-confused', 'не понял'], ['e-excited', 'в восторге'], ['e-bored', 'скучает'], ['e-scared', 'испугался'], ['e-joy', 'радуется'], ['e-dance', 'танцует'], ['e-startle', 'удивлён']];
     const grid = ch === 'none' ? '' : `<div class="mpemo">${emo.map(([c, l]) => `<div class="mpcol">${pill({ cls: 'emo', content: eyesMini(c) })}<div class="mpl">${l}</div></div>`).join('')}</div>`;
     return pill({ content, after, cls: 'big' }) + cap({ eyes: 'Глаза', buddies: 'Человечки', none: 'Никого' }[ch], true) + grid;
   },

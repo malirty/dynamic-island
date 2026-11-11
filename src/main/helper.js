@@ -17,13 +17,15 @@ class Helper {
 
   start() {
     const script = path.join(__dirname, 'helper.ps1');
-    this.proc = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script], {
+    const proc = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script], {
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
+    this.proc = proc;
+    proc.stdin.on('error', () => {}); // writing to a process that just died must not crash the app
     let resolveReady;
     this.ready = new Promise((r) => (resolveReady = r));
-    const rl = readline.createInterface({ input: this.proc.stdout });
+    const rl = readline.createInterface({ input: proc.stdout });
     rl.on('line', (line) => {
       let msg;
       try { msg = JSON.parse(line); } catch { return; }
@@ -34,11 +36,12 @@ class Helper {
       clearTimeout(p.timer);
       msg.ok ? p.resolve(msg.data) : p.reject(new Error(msg.error || 'helper error'));
     });
-    this.proc.stderr.on('data', (d) => {
+    proc.stderr.on('data', (d) => {
       const s = d.toString().trim();
       if (s) console.warn(`[helper:${this.name}]`, s.slice(0, 400));
     });
-    this.proc.on('exit', () => {
+    proc.on('exit', () => {
+      if (proc !== this.proc) return; // an old, replaced process
       for (const p of this.pending.values()) p.reject(new Error('helper exited'));
       this.pending.clear();
       if (!this.dead) setTimeout(() => this.start(), 1500);
@@ -54,10 +57,24 @@ class Helper {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error(`helper timeout: ${cmd}`));
+        // the process is stuck on something and would hold up every call after it
+        console.warn(`[helper:${this.name}] no answer to ${cmd} in ${timeoutMs} ms, restarting`);
+        this.restart();
       }, timeoutMs);
       this.pending.set(id, { resolve, reject, timer });
       this.proc.stdin.write(line + '\n');
     });
+  }
+
+  restart() {
+    if (this.dead || this.restarting) return;
+    this.restarting = true;
+    const old = this.proc;
+    for (const p of this.pending.values()) { clearTimeout(p.timer); p.reject(new Error('helper restarted')); }
+    this.pending.clear();
+    this.start();
+    try { old.kill(); } catch {}
+    this.ready.then(() => { this.restarting = false; });
   }
 
   stop() {

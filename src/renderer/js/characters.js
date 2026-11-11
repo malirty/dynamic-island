@@ -5,7 +5,7 @@
 import { state, bus, $$, EYE_FX } from './core.js';
 
 const stage = document.getElementById('stage');
-export const MOODS = ['mood-dance', 'mood-think', 'mood-ponder', 'mood-sad', 'mood-busy', 'mood-idea', 'mood-joy', 'mood-shy', 'mood-startle', 'mood-angry', 'mood-sleepy', 'mood-sleep'];
+export const MOODS = ['mood-dance', 'mood-think', 'mood-ponder', 'mood-sad', 'mood-love', 'mood-laugh', 'mood-confused', 'mood-excited', 'mood-bored', 'mood-scared', 'mood-busy', 'mood-idea', 'mood-joy', 'mood-shy', 'mood-startle', 'mood-angry', 'mood-sleepy', 'mood-sleep'];
 let temp = null, tempTimer = null;
 let cursor = { x: 0, y: 0 };
 export const flags = { aiThinking: false, agentWorking: false };
@@ -24,6 +24,7 @@ function mood() {
   // sleepy first: half the sleep timeout, or late at night after a minute idle
   const night = (() => { const hh = new Date().getHours(); return hh >= 1 && hh < 6; })();
   if (away && (state.idle > sleepMin * 30 || (night && state.idle > 60))) return 'mood-sleepy';
+  if (away && state.idle > 50) return 'mood-bored';
   if (flags.aiThinking) return 'mood-think';
   if (flags.agentWorking) return 'mood-ponder'; // an AI agent is working: deep in thought
   if (busy) return 'mood-busy';
@@ -36,11 +37,14 @@ export const currentMood = () => lastMood;
 export function applyMood() {
   const m = mood();
   if (m !== lastMood) {
-    // a quick squint while the face changes, so one expression melts into the next
-    stage.classList.add('morph');
-    clearTimeout(morphT);
-    morphT = setTimeout(() => stage.classList.remove('morph'), 170);
+    // one expression melts into the next: remember how the face looks right now,
+    // switch the mood, then glide from that pose to wherever the new mood is going
+    const snaps = snapshotFaces();
     for (const c of MOODS) stage.classList.toggle(c, c === m);
+    // let the new mood's own CSS animations start *before* the glide is added, so the glide
+    // sits on top of them from the very first frame (otherwise they flick through once)
+    for (const [e, , eyes] of snaps) { getComputedStyle(e).transform; for (const [x] of eyes) getComputedStyle(x).height; }
+    blendFrom(snaps);
     lastMood = m;
     bus.emit('mood-changed', m);
   }
@@ -52,6 +56,39 @@ export function applyMood() {
   document.documentElement.style.setProperty('--eyeBase', state.settings?.island?.eyeColor || 'var(--fg)');
 }
 
+// ---------- smooth blending between emotions ----------
+// Each mood has its own shapes and its own looping animations; switching classes would
+// snap from one pose to the other. Instead the current look is captured and a Web Animation
+// with only a start keyframe runs over it: the end is the live value of the new mood
+// (including its CSS animation), so the face flows into it without a jump.
+const EYE_PROPS = ['height', 'width', 'translate', 'scale', 'rotate', 'borderTopLeftRadius', 'borderTopRightRadius', 'borderBottomLeftRadius', 'borderBottomRightRadius',
+  'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'backgroundColor', 'borderTopColor', 'borderRightColor', 'borderLeftColor', 'clipPath'];
+const BLEND = { duration: 560, easing: 'cubic-bezier(.33, 0, .2, 1)' };
+function pick(el, props) {
+  const cs = getComputedStyle(el), o = {};
+  for (const p of props) { const v = cs[p]; if (v && v !== 'auto') o[p] = v; }
+  return o;
+}
+function snapshotFaces() {
+  const out = [];
+  for (const e of $$('.eyes:not(.fxl)')) {
+    if (!e.offsetWidth) continue;
+    out.push([e, pick(e, ['transform', 'filter']), [...e.querySelectorAll('.eye')].map((x) => [x, pick(x, EYE_PROPS)])]);
+  }
+  return out;
+}
+function blendFrom(snaps) {
+  for (const [e, face, eyes] of snaps) {
+    if (!e.isConnected) continue;
+    // start in this very frame (a new animation otherwise waits a frame, and the new face flashes in)
+    const run = (el, kf) => { try { const an = el.animate([{ ...kf, offset: 0 }], BLEND); an.currentTime = 0; } catch {} };
+    run(e, face);
+    for (const [x, s] of eyes) run(x, s);
+  }
+}
+
+// a short-lived emotion over the current one (petted while thinking -> shy -> back to thinking);
+// the face blends both ways because every change goes through applyMood
 export function flashMood(name, ms = 2200) {
   if (state.settings?.dnd && (name === 'mood-startle' || name === 'mood-angry')) return;
   temp = name;
@@ -127,6 +164,45 @@ export function initCharacters() {
     const b = bs[Math.floor(Math.random() * bs.length)];
     if (b) { b.style.transform = `rotate(${(Math.random() - 0.5) * 14}deg)`; setTimeout(() => (b.style.transform = ''), 90); }
   });
+  // Dancing: a smooth groove locked to the song's tempo. The face nods down on every
+  // beat and sways left/right over two beats (like vibing to music), the eyes narrow
+  // a little on the beat and a strong bass hit gives a small bounce.
+  let period = 480, phase = 0, phaseErr = 0, lastBeatT = 0, lastFrame = 0, hit = 0, hitTarget = 0, grooving = false;
+  bus.on('beat', (bass) => {
+    if (!stage.classList.contains('mood-dance')) return;
+    const t = performance.now();
+    if (lastBeatT) { const g = t - lastBeatT; if (g > 250 && g < 1100) period = period * 0.7 + g * 0.3; }
+    lastBeatT = t;
+    phaseErr = Math.round(phase) - phase; // drift toward the beat over the next frames, never jump
+    hitTarget = Math.min(1, 0.5 + (bass || 0.5));
+  });
+  function groove(now) {
+    requestAnimationFrame(groove);
+    const dt = Math.min(50, now - (lastFrame || now));
+    lastFrame = now;
+    const on = stage.classList.contains('mood-dance') && state.media?.playing && !document.hidden;
+    const list = $$('.eyes:not(.fxl)');
+    if (!on) { if (grooving) { grooving = false; for (const e of list) { e.style.translate = ''; e.style.rotate = ''; e.style.scale = ''; } } return; }
+    grooving = true;
+    const fix = phaseErr * Math.min(1, dt / 480);
+    phaseErr -= fix;
+    phase += dt / period + fix;
+    hit += (hitTarget - hit) * Math.min(1, dt / 70); // a soft swell, not a kick
+    hitTarget *= Math.pow(0.86, dt / 16.7);
+    const nod = (1 + Math.cos(phase * 2 * Math.PI)) / 2;     // 1 on the beat, 0 between
+    const sway = Math.sin(phase * Math.PI);                   // left on one beat, right on the next
+    const y = (nod * 2.6 - 1).toFixed(2);
+    const r = (sway * 7).toFixed(2);
+    const x = (sway * 2.2).toFixed(2);
+    const sq = (1 - nod * 0.08 + hit * 0.06).toFixed(3), sx = (1 + nod * 0.05 + hit * 0.05).toFixed(3);
+    for (const e of list) {
+      if (!e.offsetWidth) continue;
+      e.style.translate = `${x}px ${y}px`;
+      e.style.rotate = `${r}deg`;
+      e.style.scale = `${sx} ${sq}`;
+    }
+  }
+  requestAnimationFrame(groove);
   bus.on('beat', () => {
     if (!stage.classList.contains('mood-dance')) return;
     for (const b of $$('.buddy')) { b.style.transform = `translateY(${2 + Math.random() * 3}px) rotate(${(Math.random() - 0.5) * 20}deg)`; setTimeout(() => (b.style.transform = ''), 120); }
@@ -147,6 +223,7 @@ export function initCharacters() {
     else if (playing && lastKey && m.key !== lastKey) playTrick('glance'); // next track: looks over
     wasPlaying = playing; if (m?.key) lastKey = m.key;
   });
+  bus.on('download-done', () => flashMood('mood-excited', 2400));
   // other things you do
   let lastGlance = 0, dnd = state.settings?.dnd, remCount = null;
   bus.on('fg-change', () => { const t = performance.now(); if (!temp && t - lastGlance > 4000) { lastGlance = t; playTrick('glance'); } }); // switched windows

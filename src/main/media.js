@@ -30,6 +30,9 @@ module.exports = function createMedia({ emit }) {
   let thumb = null;
   let lyrics = null;
   let busy = false;
+  // browsers update the SMTC timeline rarely; after a seek we trust our own position
+  // until the player reports a newer one
+  let seekTo = null;
 
   async function fetchLyrics(s) {
     lyrics = null;
@@ -62,7 +65,8 @@ module.exports = function createMedia({ emit }) {
     if (busy) return;
     busy = true;
     try {
-      const s = await helper.fast('media', { thumb: false }, 5000);
+      const s = await helper.fast('media', { thumb: false }, 6000);
+      if (s?.stale) return; // the player didn't answer in time: keep what we have
       if (!s?.active || !s.title) {
         if (state.active) { state = { active: false }; emit('media', state); }
         return;
@@ -83,6 +87,10 @@ module.exports = function createMedia({ emit }) {
       // SMTC position is only refreshed sporadically; extrapolate from its timestamp.
       let position = s.position || 0;
       if (s.status === 'Playing' && s.updated) position += Math.max(0, (Date.now() - s.updated) / 1000);
+      if (seekTo) {
+        if (key !== seekTo.key || (s.updated && s.updated > seekTo.at + 300)) seekTo = null; // the player caught up
+        else position = seekTo.pos + (s.status === 'Playing' ? (Date.now() - seekTo.at) / 1000 : 0);
+      }
       if (s.duration) position = Math.min(position, s.duration);
       state = {
         active: true, key, title: s.title, artist: s.artist, album: s.album, status: s.status,
@@ -99,7 +107,12 @@ module.exports = function createMedia({ emit }) {
     get: () => state,
     lyrics: () => ({ key: trackKey, lyrics }),
     async command(action, extra = {}) {
-      const r = await helper.fast('mediaCmd', { action, ...extra });
+      if (action === 'seek' && state.active) {
+        seekTo = { key: trackKey, pos: extra.position, at: Date.now() };
+        state = { ...state, position: extra.position, at: Date.now() };
+        emit('media', state); // move the progress bar at once
+      }
+      const r = await helper.fast('mediaCmd', { action, ...extra }, 6000).catch(() => ({ ok: false }));
       setTimeout(poll, 250);
       return r;
     },

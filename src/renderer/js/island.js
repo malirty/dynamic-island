@@ -29,12 +29,13 @@ stage.append(fxl);
 setTimeout(() => { if (view !== 'compact') return; isl.classList.add('prewarm'); setTimeout(() => isl.classList.remove('prewarm'), 400); }, 3000);
 setInterval(() => positionFx(), 50);
 function positionFx() {
-  const host = view === 'compact' ? $('.v-compact .mid') : view === 'mini' ? $('.v-mini .mini-eyes') : null;
+  const host = view === 'compact' ? $('.v-compact .mid') : view === 'mini' ? $('.v-mini .mini-eyes') : view === 'toast' ? $('.v-toast .toast-eyes') : flash.classList.contains('on') ? $('#flash .flash-eyes') : null;
   const r = host && !stage.classList.contains('hidden') ? host.getBoundingClientRect() : null;
   if (!r || !r.width) { fxl.style.opacity = '0'; return; }
   fxl.style.opacity = '';
   fxl.style.left = (r.left + r.width / 2 - 10).toFixed(1) + 'px';
   fxl.style.top = (r.top + r.height / 2 - 10 + (view === 'compact' ? 4 : 0)).toFixed(1) + 'px';
+  fxl.classList.toggle('small', view === 'toast' || view === 'open');
 }
 const isl = $('#island');
 const flash = $('#flash');
@@ -422,7 +423,7 @@ function nextToast() {
   const el = $('.v-toast');
   el.innerHTML = `<div class="ti">${glyphTile(t, 40)}</div>
     <div class="tb">${t.app ? `<div class="tapp">${esc(t.app)}</div>` : ''}<div class="tt">${esc(t.title || '')}</div>${t.body ? `<div class="tx">${esc(t.body)}</div>` : ''}</div>
-    <div class="tact"></div>`;
+    <div class="tact"></div><div class="teyes">${eyesHTML('main toast-eyes')}</div>`;
   const act = $('.tact', el);
   if (t.url) act.append(h('button', { class: 'btn sm', onclick: (e) => { e.stopPropagation(); api.invoke('url:open', t.url); nextToast(); } }, 'Открыть'));
   if (t.path) {
@@ -433,7 +434,8 @@ function nextToast() {
   toastTimer = setTimeout(nextToast, t.ms || (t.sticky ? 9000 : 4500));
 }
 function flashBelow(t) {
-  flash.innerHTML = `${t.thumb ? `<div class="th" style="background-image:url('${t.thumb}')"></div>` : glyphTile(t, 24)}<span>${esc(t.title)}</span>`;
+  flash.innerHTML = `${t.thumb ? `<div class="th" style="background-image:url('${t.thumb}')"></div>` : glyphTile(t, 24)}<span>${esc(t.title)}</span>${eyesHTML('main flash-eyes')}`;
+  if (t.icon === '🤔') flashMood('mood-confused', 2200); // didn't understand -> confused
   flash.classList.add('on');
   sendShape();
   clearTimeout(flash._t);
@@ -611,6 +613,12 @@ const MOOD_PALETTES = {
   joy: [['#34d399', '#a3e635', '#22c55e'], '#4ade80'],
   ponder: [['#8b6bff', '#5d8bff', '#c084fc'], '#9a7bff'],
   sad: [['#5b7bb5', '#7d93c4', '#3d5a99'], '#6f8fd0'],
+  love: [['#ff4f8b', '#ff8fb8', '#e040a0'], '#ff5d95'],
+  laugh: [['#ffcf3f', '#ff9f43', '#ffe680'], '#ffcf3f'],
+  confused: [['#a78bfa', '#60a5fa', '#c4b5fd'], '#a78bfa'],
+  excited: [['#22d3ee', '#a3e635', '#f472b6'], '#22d3ee'],
+  bored: [['#6b7280', '#8b93a1', '#4b5563'], '#7b8494'],
+  scared: [['#e0e7ff', '#a5b4fc', '#c7d2fe'], '#c7d2fe'],
   startle: [['#ffffff', '#c9e4ff', '#ffd6f5'], '#ffffff'],
 };
 function moodColors() {
@@ -789,11 +797,28 @@ function walkFrame(now) {
   if (bob) stopBob();
 }
 requestAnimationFrame(walkFrame);
+let petDir = 0, petTurns = 0, petT0 = 0, lastPet = 0;
+function trackPet(p, now) {
+  const face = $('.v-compact .mid');
+  if (!face || !lastP || view !== 'compact') return;
+  const r = face.getBoundingClientRect();
+  if (Math.abs(p.x - (r.left + r.width / 2)) > 60 || p.y > r.bottom + 14) { petTurns = 0; return; }
+  const dx = p.x - lastP.x;
+  const sp = (Math.abs(dx) / Math.max(1, now - lastT)) * 1000;
+  if (Math.abs(dx) < 2 || sp > 900) return; // strokes are calm, not frantic
+  const dir = Math.sign(dx);
+  if (dir !== petDir) {
+    if (!petTurns || now - petT0 > 1800) { petT0 = now; petTurns = 0; }
+    petTurns++; petDir = dir;
+    if (petTurns >= 3 && now - lastPet > 4000) { lastPet = now; petTurns = 0; flashMood('mood-love', 2800); playTrick('love'); }
+  }
+}
 function trackPlay(p, inside) {
   const now = performance.now();
+  if (state.settings.island.cursorReactions !== false && inside) trackPet(p, now);
   if (state.settings.island.cursorReactions !== false && inside && !islandHover && lastP && now - lastShy > 6000) {
     const sp = (Math.hypot(p.x - lastP.x, p.y - lastP.y) / Math.max(1, now - lastT)) * 1000;
-    if (sp < 350) { lastShy = now; flashMood('mood-shy', 1800); }
+    // (just moving onto the island no longer makes it shy)
   }
   if (!inside) { restAt = null; restShy = false; }
   else if (!restAt || Math.hypot(p.x - restAt.x, p.y - restAt.y) > 14) { restAt = p; restT = now; restShy = false; }
@@ -805,7 +830,7 @@ function trackPlay(p, inside) {
       if (!playT0 || now - playT0 > 1400) { playT0 = now; playDist = 0; }
       playDist += dist;
       if (playDist > 1100 && now - lastHappy > 3500) {
-        lastHappy = now; playDist = 0; flashMood('mood-shy', 2600); // played with -> shy and loving
+        lastHappy = now; playDist = 0; flashMood('mood-laugh', 2400); // tickled -> laughs
       }
     }
   }
@@ -814,7 +839,6 @@ function trackPlay(p, inside) {
 setInterval(() => {
   if (!islandHover || view !== 'compact' || hideForFullscreen) return;
   const restFor = restAt ? performance.now() - restT : 0;
-  if (restAt && !restShy && restFor >= 450) { restShy = true; lastShy = performance.now(); flashMood('mood-shy', 2200); }
   if (restAt && restFor >= (state.settings.island.miniDelay ?? 1.5) * 1000) { restAt = null; renderMini(); setView('mini'); }
 }, 120);
 let hoverTimer = null;
@@ -904,7 +928,7 @@ function wire() {
     state.downloads = d;
     if (d.length || had) renderCompact();
   });
-  api.on('download-done', (d) => showToast({ icon: '✅', app: 'Загрузки', title: d.name, body: `Скачано · ${bytes(d.size)}`, path: d.path, actions: true, ms: 6000 }));
+  api.on('download-done', (d) => (bus.emit('download-done', d), showToast({ icon: '✅', app: 'Загрузки', title: d.name, body: `Скачано · ${bytes(d.size)}`, path: d.path, actions: true, ms: 6000 })));
   api.on('media', (m) => {
     const prev = state.media;
     if (prev?.playing && !m.playing) m.pausedAt = Date.now(); else if (!m.playing) m.pausedAt = prev?.pausedAt || Date.now();
@@ -989,6 +1013,7 @@ async function boot() {
     pokes.push(now);
     playTrick('boop');
     if (pokes.length === 2 && Math.random() < 0.5) flashMood('mood-shy', 1400);
+    if (pokes.length === 3) flashMood('mood-scared', 1100);
     if (pokes.length >= 4) { pokes = []; flashMood('mood-angry', 2600); }
   });
   setBubbleClick((item) => {

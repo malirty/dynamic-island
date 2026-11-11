@@ -362,6 +362,12 @@ Add-Type -AssemblyName System.Runtime.WindowsRuntime
 $script:asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
     $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1'
 })[0]
+# Like Await, but gives up after $ms (some players never answer, e.g. a seek in a browser)
+function AwaitT($op, [Type]$type, [int]$ms) {
+    $t = $script:asTaskGeneric.MakeGenericMethod($type).Invoke($null, @($op))
+    if ($t.Wait($ms)) { return $t.Result }
+    return $null
+}
 function Await($op, [Type]$type) {
     $t = $script:asTaskGeneric.MakeGenericMethod($type).Invoke($null, @($op))
     $null = $t.Wait(-1)
@@ -391,7 +397,8 @@ function Get-MediaSession {
 function Cmd-Media($a) {
     $s = Get-MediaSession
     if (-not $s) { return @{ active = $false } }
-    $p = Await ($s.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
+    $p = AwaitT ($s.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties]) 3000
+    if (-not $p) { return @{ stale = $true } }
     $pb = $s.GetPlaybackInfo()
     $tl = $s.GetTimelineProperties()
     $r = @{
@@ -410,7 +417,8 @@ function Cmd-Media($a) {
         try {
             # PowerShell can't bind AsStreamForRead() to a WinRT COM object directly,
             # so invoke it through reflection.
-            $ras = Await ($p.Thumbnail.OpenReadAsync()) ([Windows.Storage.Streams.IRandomAccessStreamWithContentType])
+            $ras = AwaitT ($p.Thumbnail.OpenReadAsync()) ([Windows.Storage.Streams.IRandomAccessStreamWithContentType]) 3000
+            if (-not $ras) { throw 'thumbnail timeout' }
             if (-not $script:asStreamForRead) {
                 $script:asStreamForRead = [System.IO.WindowsRuntimeStreamExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsStreamForRead' -and $_.GetParameters().Count -eq 1 } | Select-Object -First 1
             }
@@ -438,7 +446,8 @@ function Cmd-MediaCmd($a) {
         'prev' { $op = $s.TrySkipPreviousAsync() }
         'seek' { $op = $s.TryChangePlaybackPositionAsync([long]([double]$a.position * 10000000)) }
     }
-    @{ ok = (Await $op ([bool])) }
+    $res = AwaitT $op ([bool]) 2500
+    @{ ok = [bool]$res; timedOut = ($null -eq $res) }
 }
 
 function Cmd-Ocr($a) {
