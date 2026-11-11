@@ -1,5 +1,6 @@
 import { api, bus, state, $, $$, h, esc, icon, mediaIcon, clock, bytes, coverColor, saveSettings, glyphTile, weatherIcon, EYE_FX } from './core.js';
 import { audioActive } from './audio.js';
+import { play as playSound } from './sounds.js';
 import { initWater } from './water.js';
 import { setBubbles, setBubbleClick, bubblesCursor, overBubble, bubblesHitArea } from './bubbles.js';
 import { initJelly } from './jelly.js';
@@ -403,7 +404,7 @@ function renderMiniSummary(el) {
 
 // ---------------- toasts & notifications ----------------
 function showToast(t) {
-  if (t.icon === '⚠️') flashMood('mood-angry', 2600); // errors make the island angry (and red)
+  if (t.icon === '⚠️') { flashMood('mood-angry', 2600); playSound('error'); } // errors make the island angry (and red)
   toastQueue.push(t);
   if (!currentToast) nextToast();
 }
@@ -571,7 +572,7 @@ export function openTab(id) {
   const dir = order.indexOf(id) >= order.indexOf(activeTab) ? 1 : -1;
   const prev = activeTab;
   activeTab = id;
-  if (view !== 'open') { setView('open'); api.invoke('island:focus'); }
+  if (view !== 'open') { setView('open'); api.invoke('island:focus'); playSound('open'); }
   for (const t of $$('.tab')) t.classList.toggle('on', t.dataset.id === id);
   for (const p of $$('.page')) {
     p.style.setProperty('--dir', dir);
@@ -893,7 +894,8 @@ function wire() {
     applyTheme(); bus.emit('settings', state.settings); bus.emit('settings-external');
     buildTabs();
   });
-  api.on('clips', (c) => { state.clips = c; bus.emit('clips', c); });
+  let topClip;
+  api.on('clips', (c) => { const id = c?.[0]?.id ?? c?.[0]?.at; if (topClip !== undefined && id !== undefined && id !== topClip) playSound('clip'); topClip = id ?? null; state.clips = c; bus.emit('clips', c); });
   api.on('shelf', (s) => { state.shelf = s; bus.emit('shelf', s); });
   api.on('reminders', (r) => { state.reminders = r; bus.emit('reminders', r); renderCompact(); });
   api.on('weather', (w) => { state.weather = w; bus.emit('weather', w); renderCompact(); });
@@ -924,6 +926,7 @@ function wire() {
     state.notifications.length = Math.min(50, state.notifications.length);
     bus.emit('notification', n);
     if (n.silent) return;
+    playSound(n.kind === 'reminder' ? (n.icon === '⏱' ? 'timer' : 'reminder') : n.kind === 'agent' ? (n.done ? 'agentDone' : 'agentAsk') : n.kind === 'call' ? 'call' : 'notify');
     if (n.askId) return; // handled by the ask view
     if (n.done) { doneFlash = { project: n.title.split(':')[0], source: n.source, until: Date.now() + 8000 }; renderCompact(); setTimeout(renderCompact, 8100); }
     showToast({ ...n, app: n.app || (n.kind === 'reminder' ? 'Напоминание' : n.kind === 'rain' ? 'Погода' : n.kind === 'agent' ? 'Агент' : ''), ms: n.sticky ? 10000 : 5000 });
@@ -935,7 +938,7 @@ function wire() {
     renderCompact();
     applyMood();
   });
-  api.on('toast', (t) => { playTrick('wink'); return view === 'open' || view === 'palette' ? flashBelow(t) : showToast(t); });
+  api.on('toast', (t) => { playTrick('wink'); if (t.icon !== '⚠️') playSound('capture'); return view === 'open' || view === 'palette' ? flashBelow(t) : showToast(t); });
   api.on('fg-change', (n) => bus.emit('fg-change', n));
   api.on('ocr-result', (r) => { openTab('text'); bus.emit('text-set', r.text); flashBelow({ icon: '🔤', title: r.translated ? 'Переведено и скопировано' : 'Текст скопирован в буфер', ms: 2200 }); });
   api.on('fullscreen', (f) => {

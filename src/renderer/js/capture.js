@@ -200,7 +200,13 @@ function moveLoupe(x, y) {
 
 // ---------- mouse ----------
 window.addEventListener('mousedown', (e) => {
-  if (e.button === 2) return api.invoke('capture:cancel');
+  if (e.button === 2) {
+    // right click: undo, never cancel the whole screenshot (that's Esc)
+    if (phase === 'select' && start) { start = null; sel = null; selEl.style.display = 'none'; document.body.className = 'dim'; }
+    else if (phase === 'edit') { if (cur) cur = null; else shapes.pop(); redraw(); }
+    return;
+  }
+  if (e.button !== 0) return;
   const p = { x: e.clientX, y: e.clientY };
   if (mode === 'color') return done({ type: 'color', color: hex(...pixel(p.x, p.y)) });
   if (phase === 'select') { start = p; sel = { x: p.x, y: p.y, w: 0, h: 0 }; document.body.className = 'selecting'; return; }
@@ -219,7 +225,8 @@ window.addEventListener('mousemove', (e) => {
     redraw();
   }
 });
-window.addEventListener('mouseup', () => {
+window.addEventListener('mouseup', (e) => {
+  if (e.button !== 0) return;
   if (phase === 'select' && start) {
     start = null;
     if (!sel || sel.w < 4 || sel.h < 4) {
@@ -259,7 +266,7 @@ window.addEventListener('keydown', (e) => {
       full = g.getImageData(0, 0, c.width, c.height);
     }
     document.body.className = 'dim';
-    hint({ region: 'Выдели область · клик — весь экран · Esc — отмена', color: 'Наведи на цвет и кликни — HEX скопируется', qr: 'Выдели QR-код', ocr: 'Выдели текст, который нужно распознать', translate: 'Выдели текст для перевода' }[mode] || '');
+    hint({ region: 'Выдели область · клик — весь экран · ПКМ — отменить последнее · Esc — выйти', color: 'Наведи на цвет и кликни — HEX скопируется', qr: 'Выдели QR-код', ocr: 'Выдели текст, который нужно распознать', translate: 'Выдели текст для перевода' }[mode] || '');
     if (mode === 'color') { document.body.style.cursor = 'none'; document.body.className = ''; }
   };
   img.src = d.dataUrl;

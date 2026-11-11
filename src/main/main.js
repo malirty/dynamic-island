@@ -175,9 +175,23 @@ async function startCapture(mode) {
 }
 
 async function ocrImage(image, lang) {
+  // small screen text is read much better from an enlarged picture
+  const sz = image.getSize();
+  if (sz.height < 900 && sz.width * 2 < 9000) image = image.resize({ width: sz.width * 2, quality: 'best' });
   const file = path.join(os.tmpdir(), `island-ocr-${Date.now()}.png`);
   fs.writeFileSync(file, image.toPNG());
-  try { return await helper.slow('ocr', { path: file, lang }, 30000); } finally { fs.rm(file, () => {}); }
+  try {
+    if (lang) return await helper.slow('ocr', { path: file, lang }, 30000);
+    // The profile language (often English) turns Russian into look-alike Latin letters.
+    // The Russian recognizer reads both alphabets; plain Latin text goes to the English one.
+    const ru = await helper.slow('ocr', { path: file, lang: 'ru' }, 30000).catch(() => null);
+    const t = ru?.text || '';
+    const letters = (t.match(/[A-Za-zА-Яа-яЁё]/g) || []).length;
+    const cyr = (t.match(/[А-Яа-яЁё]/g) || []).length;
+    if (ru && String(ru.lang || '').startsWith('ru') && (!letters || cyr / letters > 0.15)) return ru;
+    const en = await helper.slow('ocr', { path: file, lang: 'en-US' }, 30000).catch(() => null);
+    return en || ru || await helper.slow('ocr', { path: file }, 30000);
+  } finally { fs.rm(file, () => {}); }
 }
 
 // ---------------- helpers ----------------

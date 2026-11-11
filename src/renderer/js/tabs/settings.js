@@ -1,5 +1,6 @@
 import { api, bus, state, $, h, esc, icon, debounce, saveSettings, EYE_FX } from '../core.js';
 import { QUICK } from './home.js';
+import { SOUND_EVENTS, SOUNDS, play as playSound } from '../sounds.js';
 import { TILES, CC_DEFAULTS, TOGGLE_IDS, POWER } from './control.js';
 
 let root, ctx, hintBox;
@@ -342,6 +343,39 @@ function render() {
   // notifications + telegram
   tgAskBox = h('div');
   const tgStatus = h('span', { class: 'muted small' }, state.telegram === 'on' ? 'подключён' : state.telegram === 'connecting' ? 'подключаюсь…' : 'не подключён');
+  // sounds
+  const snd = (s.sounds ||= { enabled: true, volume: 0.6, quietInDnd: true });
+  snd.events ||= {}; snd.custom ||= {};
+  const fileName = (p) => (p ? p.split(/[\\/]/).pop() : '');
+  const soundRow = ([id, label, def]) => {
+    const sel = h('select', { class: 'field', style: 'width:150px;height:30px' }, ...SOUNDS.map(([v, l]) => h('option', { value: v }, l)));
+    sel.value = snd.events[id] || def;
+    const name = h('small', { class: 'muted', style: 'max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap' }, snd.events[id] === 'custom' ? fileName(snd.custom[id]) : '');
+    const file = h('input', { type: 'file', accept: 'audio/*', style: 'display:none' });
+    file.onchange = () => {
+      const f = file.files?.[0];
+      const pth = f && api.pathOf(f);
+      if (pth) { snd.custom[id] = pth; snd.events[id] = 'custom'; sel.value = 'custom'; name.textContent = fileName(pth); commit(); playSound(id, { preview: true }); }
+      else sel.value = snd.events[id] || def;
+    };
+    sel.onchange = () => {
+      if (sel.value === 'custom' && !snd.custom[id]) return file.click();
+      snd.events[id] = sel.value;
+      name.textContent = sel.value === 'custom' ? fileName(snd.custom[id]) : '';
+      commit();
+      playSound(id, { preview: true });
+    };
+    return row(label, null, h('div', { class: 'row', style: 'gap:6px;flex:none' }, name, sel,
+      h('button', { class: 'ibtn', title: 'Послушать', html: icon('play', 14), onclick: () => playSound(id, { preview: true }) }),
+      h('button', { class: 'ibtn', title: 'Выбрать свой звуковой файл', html: icon('folder', 14), onclick: () => file.click() }), file),
+      label, 'Выбери звук из списка или свой файл (mp3, wav, ogg). Кнопка ▶ — послушать.');
+  };
+  add('sounds', ...group('Звуки',
+    row('Звуки острова', null, toggle(() => snd.enabled !== false, (v) => (snd.enabled = v)), 'Звуки', 'Остров озвучивает события: таймер, напоминания, уведомления, работу агентов, звонки, скриншоты.'),
+    row('Громкость', null, range(0, 1, 0.05, () => snd.volume ?? 0.6, (v) => (snd.volume = v)), 'Громкость', 'Общая громкость звуков острова.'),
+    row('Тише в «Не беспокоить»', 'таймер и напоминания всё равно звучат', toggle(() => snd.quietInDnd !== false, (v) => (snd.quietInDnd = v)), 'Не беспокоить', 'Когда включено «Не беспокоить», остров молчит — кроме таймера и напоминаний.')));
+  add('sounds', ...group('Какой звук на что', ...SOUND_EVENTS.map(soundRow)));
+
   add('notify', ...group('Уведомления',
     row('Уведомления Windows', 'показывать на острове', toggle(() => s.notifications.windows, (v) => (s.notifications.windows = v)), 'Windows', 'Остров читает новые уведомления Windows и показывает их у себя.'),
     row('Не беспокоить', 'остров молчит', toggle(() => s.dnd, (v) => (s.dnd = v)), 'Не беспокоить', 'Уведомления копятся тихо, персонажи не вздрагивают. Напоминания всё равно сработают.'),
@@ -381,7 +415,7 @@ function render() {
 const SECTIONS = [
   ['look', 'Внешний вид', 'palette'], ['island', 'Остров', 'eye'], ['layout', 'Вкладки и главная', 'home'],
   ['actions', 'Действия и центр', 'control'], ['ai', 'ИИ', 'ai'], ['weather', 'Погода', 'weather'],
-  ['notify', 'Уведомления', 'bell'], ['agents', 'Агенты', 'agent'], ['keys', 'Горячие клавиши', 'grab'], ['app', 'Файлы и приложение', 'folder'],
+  ['notify', 'Уведомления', 'bell'], ['sounds', 'Звуки', 'volume'], ['agents', 'Агенты', 'agent'], ['keys', 'Горячие клавиши', 'grab'], ['app', 'Файлы и приложение', 'folder'],
 ];
 let current = 'look', query = '', navEl, contentEl, searchEl;
 
