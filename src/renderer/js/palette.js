@@ -138,6 +138,7 @@ function showAnswer(html, raw) {
 let aiReq = null;
 async function askAI(q) {
   if (!q) return;
+  if ((state.settings.ai.mode || 'web') === 'web') { hostApi.openTab('ai'); setTimeout(() => bus.emit('ai-web-ask', q), 150); return; }
   const id = 'pal-' + Date.now();
   aiReq = id;
   let text = '';
@@ -154,7 +155,7 @@ async function askAI(q) {
       h('button', { class: 'btn sm ghost', onclick: () => { hostApi.openTab('ai'); bus.emit('ai-continue', { q, a: text }); } }, 'Продолжить в чате')));
     hostApi.resize();
   });
-  const off3 = api.on('ai-error', (d) => { if (d.reqId !== id) return; done(); answer.innerHTML = `<span style="color:var(--bad)">${esc(d.error)}</span>`; hostApi.resize(); });
+  const off3 = api.on('ai-error', (d) => { if (d.reqId !== id) return; done(); bus.emit('mood-flash', { mood: 'mood-angry', ms: 2600 }); answer.innerHTML = `<span style="color:var(--bad)">${esc(d.error)}</span>`; hostApi.resize(); });
   api.invoke('ai:chat', id, { messages: [{ role: 'user', content: q }] });
 }
 

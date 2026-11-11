@@ -141,7 +141,8 @@ async function searchFiles(q) {
 function createToastWatcher({ state, emit, enabled }) {
   const db = path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'Windows', 'Notifications', 'wpndatabase.db');
   let primed = false;
-  const decode = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+  // toast text may be plain, entity-encoded or wrapped in CDATA (OneDrive does that)
+  const decode = (s) => s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').trim();
   function appName(id) {
     let n = id.split('\\').pop().replace(/\.exe$/i, '');
     if (n.includes('!')) n = n.split('!').pop();
@@ -161,7 +162,7 @@ function createToastWatcher({ state, emit, enabled }) {
       for (const r of fresh.reverse()) {
         const texts = [...(r.xml || '').matchAll(/<text[^>]*>([\s\S]*?)<\/text>/g)].map((m) => decode(m[1]).trim()).filter(Boolean);
         if (!texts.length) continue;
-        emit({ kind: 'windows', app: appName(r.app), title: texts[0], body: texts.slice(1).join(' · '), at: Date.now() });
+        emit({ kind: 'windows', app: appName(r.app), logoHint: r.app, title: texts[0], body: texts.slice(1).join(' · '), at: Date.now() });
       }
     } catch {}
   }

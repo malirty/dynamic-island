@@ -1,5 +1,5 @@
 // Standalone settings window: sections on the left, live preview on the right.
-import { api, state, bus, h } from './core.js';
+import { api, state, bus, h, glyphTile } from './core.js';
 import { mountSettings } from './tabs/settings.js';
 
 const root = document.documentElement;
@@ -17,7 +17,7 @@ const toastEl = document.getElementById('wtoast');
 let toastT;
 function flash(t) {
   toastEl.innerHTML = '';
-  toastEl.append(h('span', {}, t.icon || '•'), h('span', {}, t.title || ''));
+  toastEl.append(h('span', { html: glyphTile(t, 22) }), h('span', {}, t.title || ''));
   toastEl.classList.add('on');
   clearTimeout(toastT);
   toastT = setTimeout(() => toastEl.classList.remove('on'), t.ms || 2000);

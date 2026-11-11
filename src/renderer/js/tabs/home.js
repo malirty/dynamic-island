@@ -1,4 +1,4 @@
-import { api, bus, state, $, $$, h, esc, icon, clock, ago, bytes, wmo, saveSettings } from '../core.js';
+import { api, bus, state, $, $$, h, esc, icon, mediaIcon, clock, ago, bytes, wmo, saveSettings, glyphTile } from '../core.js';
 import { eyesHTML } from '../characters.js';
 
 export const QUICK = {
@@ -30,9 +30,9 @@ function playerW() {
       <div class="t"></div><div class="a"></div><div class="src"></div>
       <div class="prog"><span class="pos">0:00</span><div class="track"><i></i></div><span class="dur">0:00</span></div>
       <div class="ctl">
-        <button class="cbtn" data-c="prev">${icon('prev', 18)}</button>
+        <button class="cbtn" data-c="prev">${mediaIcon('prev', 24)}</button>
         <button class="cbtn big" data-c="toggle"></button>
-        <button class="cbtn" data-c="next">${icon('next', 18)}</button>
+        <button class="cbtn" data-c="next">${mediaIcon('next', 24)}</button>
         <div style="flex:1"></div>
         <button class="ibtn lyrb" title="Текст песни">${icon('lyrics', 18)}</button>
       </div>
@@ -75,7 +75,7 @@ function playerW() {
       api.invoke('media:appVolume').then((v) => { if (v != null) { vol.value = v; vol.oninput(); } });
       renderLyrics();
     }
-    $('[data-c="toggle"]', w).innerHTML = icon(m.playing ? 'pause' : 'play', 20);
+    $('[data-c="toggle"]', w).innerHTML = mediaIcon(m.playing ? 'pause' : 'play', 23);
     $('.pos', w).textContent = clock(m.position || 0);
     $('.dur', w).textContent = clock(m.duration || 0);
     $('.track', w).style.setProperty('--p', m.duration ? m.position / m.duration : 0);
@@ -239,10 +239,37 @@ function notifsW() {
     const list = state.notifications.slice(0, 4);
     if (!list.length) w.append(h('div', { class: 'empty' }, state.settings.dnd ? 'Не беспокоить включено' : 'Нет новых уведомлений'));
     for (const n of list) w.append(h('div', { class: 'notif' },
-      h('div', { class: 'ap' }, n.icon || (n.app || '•')[0]),
+      h('div', { class: 'ap', html: glyphTile(n, 28) }),
       h('div', { class: 'grow' }, h('div', { class: 'small', style: 'font-weight:650' }, n.title || ''), n.body ? h('div', { class: 'muted small', style: 'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden' }, n.body) : '', h('div', { class: 'muted small', style: 'font-size:10.5px' }, `${n.app || ''} · ${ago(n.at)}`))));
   }
   bus.on('notification', update);
+  update();
+  return w;
+}
+
+let callEl = null;
+function callW() {
+  const w = h('div', { class: 'card w wide callcard' });
+  function update() {
+    const calls = state.calls || [];
+    w.style.display = calls.length ? '' : 'none';
+    w.innerHTML = '';
+    w._timers = [];
+    for (const c of calls) {
+      const logo = c.icon ? h('img', { class: 'cc-logo', src: c.icon }) : h('div', { class: 'cc-logo fallback' }, (c.name || '?')[0]);
+      const t = h('span', { class: 'cc-time' }, clock((Date.now() - c.since) / 1000));
+      w.append(h('div', { class: 'cc-row' },
+        h('div', { class: 'cc-logo-wrap' }, logo),
+        h('div', { class: 'grow' }, h('div', { class: 'cc-title' }, `Звонок в ${c.name}`), h('div', { class: 'muted small' }, t, c.micMuted ? ' · микрофон выключен' : '', c.soundMuted ? ' · звук заглушён' : '')),
+        h('button', { class: 'cc-btn' + (c.micMuted ? ' muted' : ''), title: c.micMuted ? 'Включить микрофон' : 'Выключить микрофон', html: icon(c.micMuted ? 'micoff' : 'mic', 18), onclick: () => api.invoke('calls:mic', c.id) }),
+        h('button', { class: 'cc-btn' + (c.soundMuted ? ' muted' : ''), title: c.soundMuted ? 'Вернуть звук' : 'Заглушить звук звонка', html: icon(c.soundMuted ? 'mute' : 'volume', 18), onclick: () => api.invoke('calls:sound', c.id) }),
+        h('button', { class: 'btn sm', onclick: () => api.invoke('calls:focus', c.id) }, `Открыть ${c.name}`)));
+      w._timers = w._timers || [];
+      w._timers.push(() => { t.textContent = clock((Date.now() - c.since) / 1000); });
+    }
+  }
+  bus.on('calls', () => { update(); ctx.resize(); });
+  setInterval(() => { for (const f of w._timers || []) f(); }, 1000);
   update();
   return w;
 }
@@ -253,6 +280,7 @@ function render() {
   const grid = $('.home', root);
   grid.innerHTML = '';
   const els = [];
+  els.push(callEl ||= callW()); // one card for the app's life, shown only while a call is on
   for (const wd of state.settings.home) if (wd.on && WIDGETS[wd.id]) els.push(WIDGETS[wd.id]());
   // the layout adapts to whatever is left: a lone half-width card stretches
   const halves = els.filter((e) => !e.classList.contains('wide'));

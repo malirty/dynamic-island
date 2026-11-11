@@ -6,7 +6,7 @@ const { app } = require('electron');
 const DEFAULT_SETTINGS = {
   theme: {
     mode: 'dark',            // dark | light
-    style: 'liquid',         // liquid | glass | gradient | solid
+    style: 'mood',           // mood ("По умолчанию": colour follows the mood) | liquid | glass | gradient | solid
     colors: ['#7c5cff', '#00d4ff', '#ff4fd8'],
     solid: '#0b0b0f',
     glow: 0.8,               // 0..1
@@ -20,6 +20,7 @@ const DEFAULT_SETTINGS = {
   },
   island: {
     character: 'eyes',       // eyes | buddies | none
+    showPlayer: true,        // track in the pill / mini island (the island dances either way)
     showSeconds: false,
     hideOnFullscreen: true,
     autostart: false,

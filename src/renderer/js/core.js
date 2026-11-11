@@ -93,6 +93,21 @@ export function wmo(code, isDay = 1) {
 
 // ---------- icons (stroke icons, 24x24) ----------
 const P = {
+  sunrise: 'M12 3v5M8.5 6.5L12 3l3.5 3.5M5 19h14M7 15.5a5 5 0 0 1 10 0M3 15.5h1.5M19.5 15.5H21M5.6 10.6l1 1M18.4 10.6l-1 1',
+  sunset: 'M12 8V3M8.5 4.5L12 8l3.5-3.5M5 19h14M7 15.5a5 5 0 0 1 10 0M3 15.5h1.5M19.5 15.5H21M5.6 10.6l1 1M18.4 10.6l-1 1',
+  alert: 'M12 3.5l9 16H3zM12 10v4.2M12 17.2v.01',
+  plane: 'M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z',
+  keyboard: 'M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10',
+  question: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 17h.01',
+  rain: 'M7 14.5a4 4 0 0 1-.6-8 5.5 5.5 0 0 1 10.6 1.5 3.5 3.5 0 0 1 0 6.5zM8.5 17.5l-1 2.5M12.5 17.5l-1 2.5M16.5 17.5l-1 2.5',
+  cloud: 'M7 18a4.5 4.5 0 0 1-.6-9 6 6 0 0 1 11.4 1.7A3.7 3.7 0 0 1 17.5 18z',
+  snow: 'M7 13.5a4 4 0 0 1-.6-8 5.5 5.5 0 0 1 10.6 1.5 3.5 3.5 0 0 1 0 6.5zM8 17.5h.01M12 19.5h.01M16 17.5h.01M10 21.5h.01M14 21.5h.01',
+  storm: 'M7 14a4 4 0 0 1-.6-8 5.5 5.5 0 0 1 10.6 1.5A3.5 3.5 0 0 1 17 14M13 11l-3 5h4l-3 5',
+  fog: 'M4 9h16M6 13h13M4 17h15M8 5h9',
+  partly: 'M8 3v1.5M3.5 8H2M4.6 4.6l1 1M12.4 4.6l-1 1M5.5 10.5A3.5 3.5 0 1 1 11.4 7M9 20a4 4 0 0 1-.5-8 5 5 0 0 1 9.6 1.4A3.3 3.3 0 0 1 18 20z',
+  claude: 'M12 3v6.5M12 14.5V21M3 12h6.5M14.5 12H21M5.6 5.6l4.6 4.6M13.8 13.8l4.6 4.6M5.6 18.4l4.6-4.6M13.8 10.2l4.6-4.6',
+  codex: 'M4 4.5h16a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1zM7 10l3 2.2L7 14.4M12.5 15h4.5',
+  bulb: 'M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z',
   home: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z',
   clip: 'M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1zM8 6H6a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-2M9 12h6M9 16h4',
   ai: 'M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8zM18 15l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z',
@@ -110,6 +125,8 @@ const P = {
   copy: 'M9 9h10v11H9zM5 15V4h11',
   search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-3.5-3.5',
   mic: 'M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zM5 11a7 7 0 0 0 14 0M12 18v3',
+  micoff: 'M15 10V6a3 3 0 0 0-5.7-1.3M9 9v3a3 3 0 0 0 5.1 2.1M5 11a7 7 0 0 0 11.6 5.3M19 11a7 7 0 0 1-.7 3M12 18v3M3 3l18 18',
+  phone: 'M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2',
   send: 'M4 12l16-8-6 16-2-7z',
   attach: 'M20 11.5l-8.5 8.5a5 5 0 0 1-7-7L13 4.5a3.5 3.5 0 0 1 5 5L9.5 18a2 2 0 0 1-3-3L14 7.5',
   window: 'M4 5h16v14H4zM4 9h16',
@@ -161,9 +178,67 @@ const P = {
   hotspot: 'M12 12h.01M8.5 15.5a5 5 0 0 1 0-7M15.5 8.5a5 5 0 0 1 0 7M5.6 18.4a9 9 0 0 1 0-12.8M18.4 5.6a9 9 0 0 1 0 12.8',
   grab: 'M8 12V5a1.5 1.5 0 0 1 3 0v6M11 10V4a1.5 1.5 0 0 1 3 0v6M14 10V5.5a1.5 1.5 0 0 1 3 0V14a7 7 0 0 1-7 7h-.5a6 6 0 0 1-5-2.7L3 15.5a1.5 1.5 0 0 1 2.5-1.7L8 16',
 };
+// ---------- glyphs: app logos / drawn symbols instead of emoji ----------
+const TONES = {
+  ok: ['#34c759', '#1d9a46'], bad: ['#ff5b4f', '#d02a20'], blue: ['#4c8dff', '#2459d6'], violet: ['#9b6bff', '#6436d8'],
+  amber: ['#ffae2b', '#e07800'], pink: ['#ff5aa5', '#cc2271'], teal: ['#22c7b4', '#0e8e80'], gray: ['#7b8494', '#4d5563'],
+  claude: ['#ee8a5e', '#c75a32'], codex: ['#3a3a44', '#0d0d12'],
+};
+const EMO = {
+  '✅': ['check', 'ok'], '⚠️': ['alert', 'bad'], '📋': ['clip', 'blue'], '🎙': ['mic', 'violet'], '⏱': ['timer', 'amber'],
+  '⏰': ['bell', 'amber'], '🔔': ['bell', 'amber'], '🖼': ['image', 'blue'], '🎨': ['color', 'pink'], '▦': ['qr', 'gray'],
+  '🔤': ['ocr', 'blue'], '📥': ['download', 'blue'], '🎵': ['note', 'pink'], '🛡': ['vpn', 'teal'], '📶': ['wifi', 'blue'],
+  '✈️': ['plane', 'blue'], '⌨️': ['keyboard', 'gray'], '🤔': ['question', 'violet'], '✋': ['stop', 'amber'], '📞': ['phone', 'ok'],
+  '🌧': ['rain', 'blue'], '⛅': ['partly', 'blue'], '✳': ['claude', 'claude'], '📎': ['attach', 'gray'],
+};
+// which symbol a notification/toast gets: by where it came from, then by its emoji
+export function glyphFor(t) {
+  let g = null;
+  if (t.done) g = ['check', 'ok', 1]; // finished: a round green tick, not a logo
+  else if (t.kind === 'agent') g = t.source === 'codex' ? ['codex', 'codex'] : ['claude', 'claude'];
+  else if (t.kind === 'reminder') g = [t.icon === '⏱' ? 'timer' : 'bell', 'amber'];
+  else if (t.kind === 'rain') g = ['rain', 'blue'];
+  else if (t.kind === 'call') g = ['phone', 'ok'];
+  else g = EMO[t.icon] || null;
+  if (!g) return null;
+  const [a, b] = TONES[g[1]];
+  return { ic: g[0], bg: `linear-gradient(145deg, ${a}, ${b})`, round: !!g[2] };
+}
+// a small tile: app logo, drawn symbol, or (last resort) the first letter
+export function glyphTile(t, size = 28, cls = 'gtile') {
+  const r = Math.round(size * 0.3);
+  if (t.thumb) return `<span class="${cls}" style="width:${size}px;height:${size}px;border-radius:${r}px;background:center/cover url('${t.thumb}')"></span>`;
+  if (t.logo) return `<span class="${cls} logo" style="width:${size}px;height:${size}px;border-radius:${r}px;background:center/78% no-repeat url('${t.logo}')"></span>`;
+  const g = glyphFor(t);
+  if (g) return `<span class="${cls}${g.round ? ' round' : ''}" style="width:${size}px;height:${size}px;border-radius:${g.round ? '50%' : r + 'px'};background:${g.bg};color:#fff">${icon(g.ic, Math.round(size * (g.round ? 0.52 : 0.58)))}</span>`;
+  if (t.color) return `<span class="${cls}" style="width:${size}px;height:${size}px;border-radius:${r}px;background:${t.color}"></span>`;
+  const letter = (t.app || t.title || '•').trim()[0] || '•';
+  return `<span class="${cls}" style="width:${size}px;height:${size}px;border-radius:${r}px;background:var(--card2);font-weight:800;font-size:${Math.round(size * 0.45)}px">${letter.toUpperCase().replace(/[<>&"']/g, '')}</span>`;
+}
+// weather as a drawn icon
+export function weatherIcon(code, day = 1, size = 15) {
+  const n = code === 0 ? (day ? 'sun' : 'moon') : code <= 2 ? (day ? 'partly' : 'moon') : code === 3 ? 'cloud' : code <= 48 ? 'fog'
+    : code <= 67 || (code >= 80 && code <= 82) ? 'rain' : code <= 86 ? 'snow' : 'storm';
+  return icon(n, size, 'wic w-' + n);
+}
+
+// effects around the character's eyes (shown by mood classes in CSS)
+export const CHARACTERS = [['eyes', 'Глаза'], ['cat', 'Котик'], ['bunny', 'Зайка'], ['robot', 'Робот'], ['ghost', 'Призрак'], ['alien', 'Пришелец'], ['angel', 'Ангел'], ['frog', 'Лягушка'], ['devil', 'Чертёнок'], ['buddies', 'Человечки'], ['none', 'Никого']];
+export const EYE_FX = `<div class="deco"><i></i><i></i><i></i><i></i></div><div class="fx"><i class="fx-load"></i><i class="fx-orbit"><b></b><b></b><b></b></i><i class="fx-dots"><b></b><b></b><b></b></i><i class="fx-bulb"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/></svg></i><i class="fx-bang">!</i><i class="fx-notes"><b>♪</b><b>♫</b><b>♪</b></i><i class="fx-joy"><b>✦</b><b>✦</b><b>✦</b><b>✦</b></i><i class="fx-vein"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M3 9.5c3.5 0 6.5-3 6.5-6.5M14.5 3c0 3.5 3 6.5 6.5 6.5M21 14.5c-3.5 0-6.5 3-6.5 6.5M9.5 21c0-3.5-3-6.5-6.5-6.5"/></svg></i></div>`;
+
 export function icon(name, size = 18, cls = '') {
   const d = P[name] || P.spark;
   return `<svg class="ic ${cls}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
+}
+// Filled, softly rounded media controls (iOS-like) for the players.
+const MEDIA = {
+  play: '<path d="M7.6 3.8c-1-.62-2.4.1-2.4 1.3v13.8c0 1.2 1.4 1.92 2.4 1.3l11.2-6.9a1.5 1.5 0 0 0 0-2.6z" transform="translate(1 0)"/>',
+  pause: '<rect x="5" y="3.6" width="5" height="16.8" rx="1.8"/><rect x="14" y="3.6" width="5" height="16.8" rx="1.8"/>',
+  next: '<path d="M1.6 6.6c0-1 1.1-1.55 1.9-1l7.3 5.2c.66.47.66 1.45 0 1.92l-7.3 5.2c-.8.55-1.9 0-1.9-1z"/><path d="M11.4 6.6c0-1 1.1-1.55 1.9-1l7.3 5.2c.66.47.66 1.45 0 1.92l-7.3 5.2c-.8.55-1.9 0-1.9-1z"/>',
+  prev: '<g transform="translate(24 0) scale(-1 1)"><path d="M1.6 6.6c0-1 1.1-1.55 1.9-1l7.3 5.2c.66.47.66 1.45 0 1.92l-7.3 5.2c-.8.55-1.9 0-1.9-1z"/><path d="M11.4 6.6c0-1 1.1-1.55 1.9-1l7.3 5.2c.66.47.66 1.45 0 1.92l-7.3 5.2c-.8.55-1.9 0-1.9-1z"/></g>',
+};
+export function mediaIcon(name, size = 18) {
+  return `<svg class="ic mic-${name}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor">${MEDIA[name]}</svg>`;
 }
 export const iconEl = (name, size, cls) => { const s = document.createElement('span'); s.className = 'icw'; s.innerHTML = icon(name, size, cls); return s; };
 

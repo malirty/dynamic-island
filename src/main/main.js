@@ -19,6 +19,7 @@ const createMedia = require('./media');
 const createAI = require('./ai');
 const createAgents = require('./agents');
 const createTelegram = require('./telegram');
+const createCalls = require('./calls');
 const sys = require('./system');
 
 const RENDERER = path.join(__dirname, '..', 'renderer');
@@ -31,6 +32,7 @@ let lastExternal = null; // last foreground window that isn't ours: paste target
 let fgFullscreen = false;
 let caffeineId = null;
 let hitRects = [];
+let ignoring = null; // click-through state of the island window
 
 const send = (ch, payload) => { if (island && !island.isDestroyed()) island.webContents.send(ch, payload); };
 const sendAll = (ch, payload) => {
@@ -39,7 +41,28 @@ const sendAll = (ch, payload) => {
 
 // ---------------- notifications pipeline ----------------
 const recent = [];
+// app logo for a notification (exe icon, found by path or by running process name)
+const logoCache = new Map();
+async function appLogo(hint) {
+  if (!hint) return null;
+  if (logoCache.has(hint)) return logoCache.get(hint);
+  let exe = /\.exe$/i.test(hint) && fs.existsSync(hint) ? hint : '';
+  if (!exe) {
+    const name = hint.split('\\').pop().split('!')[0].split('_')[0].replace(/\.exe$/i, '').split('.').pop();
+    if (/^[\w .-]+$/.test(name)) exe = (await helper.fast('procPath', { name }).catch(() => null))?.path || '';
+  }
+  let url = null;
+  if (exe) try { url = (await app.getFileIcon(exe, { size: 'large' })).toDataURL(); } catch {}
+  logoCache.set(hint, url);
+  return url;
+}
 function notify(n) {
+  if (n.logoHint && !n.thumb && !n.logo) {
+    const hint = n.logoHint; delete n.logoHint;
+    appLogo(hint).then((l) => notify(l ? { ...n, logo: l } : n), () => notify(n));
+    return;
+  }
+  delete n.logoHint;
   n = { id: crypto.randomUUID(), at: Date.now(), ...n };
   recent.unshift(n);
   recent.length = Math.min(recent.length, 50);
@@ -76,7 +99,7 @@ function createIsland() {
     frame: false, transparent: true, resizable: false, movable: false, minimizable: false, maximizable: false,
     fullscreenable: false, skipTaskbar: true, hasShadow: false, show: false, alwaysOnTop: true,
     backgroundColor: '#00000000', title: 'Island',
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), backgroundThrottling: false, spellcheck: false },
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), backgroundThrottling: false, spellcheck: false, webviewTag: true },
   });
   island.setAlwaysOnTop(true, 'screen-saver');
   island.setVisibleOnAllWorkspaces(true);
@@ -84,7 +107,8 @@ function createIsland() {
   hitRects = [{ x: Math.round(WIN_W / 2 - 170), y: 0, width: 340, height: 50 }];
   island.loadFile(path.join(RENDERER, 'island.html'));
   island.once('ready-to-show', () => island.showInactive());
-  island.on('blur', () => send('blur'));
+  island.on('blur', () => { send('blur'); if (process.env.ISLAND_TRACE) setTimeout(() => helper.fast('fg', {}, 3000).then((fg) => fs.appendFile(path.join(app.getPath('userData'), 'island.log'), `${new Date().toISOString()} BLUR -> ${JSON.stringify(fg)}
+`, () => {})).catch(() => {}), 120); });
   // renderer warnings/errors go to %APPDATA%/Island/island.log
   const logFile = path.join(app.getPath('userData'), 'island.log');
   island.webContents.on('console-message', (_e, level, message, line, source) => {
@@ -118,7 +142,7 @@ function openAiWindow() {
   if (aiWin && !aiWin.isDestroyed()) { aiWin.show(); aiWin.focus(); return; }
   aiWin = new BrowserWindow({
     width: 760, height: 820, minWidth: 420, minHeight: 500, frame: false, transparent: true, backgroundColor: '#00000000',
-    title: 'Island · ИИ', webPreferences: { preload: path.join(__dirname, 'preload.js'), spellcheck: false },
+    title: 'Island · ИИ', webPreferences: { preload: path.join(__dirname, 'preload.js'), spellcheck: false, webviewTag: true },
   });
   aiWin.loadFile(path.join(RENDERER, 'ai.html'));
 }
@@ -200,10 +224,10 @@ function registerHotkeys() {
   const hk = S.settings.data.hotkeys;
   const result = {};
   const reg = (acc, fn) => { if (!acc) return; try { result[acc] = globalShortcut.register(acc, fn); } catch { result[acc] = false; } };
-  reg(hk.palette, () => { island.focus(); send('palette-open'); });
+  reg(hk.palette, () => { showIsland(); island.focus(); send('palette-open'); });
   reg(hk.themeToggle, () => send('theme-toggle'));
   reg(hk.region, () => startCapture('region'));
-  reg(hk.island, () => { island.focus(); send('island-toggle'); });
+  reg(hk.island, () => { const wasHidden = !island.isVisible(); showIsland(); island.focus(); if (!wasHidden) send('island-toggle'); });
   return result;
 }
 
@@ -213,35 +237,16 @@ function applySettings() {
   services.downloads.restart();
 }
 
-// Right-click menu on the island. Settings changed here are pushed to every window.
+// Hide the island for a while (minutes) or until called back (0).
 let snoozeTimer = null;
-function showIslandMenu({ tab }) {
-  const s = S.settings.data;
-  const set = (fn) => () => { fn(s); S.settings.save(); sendAll('settings', s); applySettings(); };
-  const tabs = [['home', 'Главная'], ['clip', 'Буфер'], ['ai', 'ИИ'], ['text', 'Текст'], ['notes', 'Заметки'], ['weather', 'Погода'], ['control', 'Центр управления']];
-  const menu = Menu.buildFromTemplate([
-    { label: 'Открыть', submenu: tabs.map(([id, label]) => ({ label, click: () => { island.focus(); send('open-tab', id); } })) },
-    { label: 'Командная строка', accelerator: s.hotkeys.palette || undefined, click: () => { island.focus(); send('palette-open'); } },
-    { type: 'separator' },
-    { label: 'Скриншот области', accelerator: s.hotkeys.region || undefined, click: () => startCapture('region') },
-    { label: 'Распознать текст с экрана', click: () => startCapture('ocr') },
-    { label: 'Перевести текст с экрана', click: () => startCapture('translate') },
-    { label: 'Пипетка', click: () => startCapture('color') },
-    { label: 'Прочитать QR-код', click: () => startCapture('qr') },
-    { type: 'separator' },
-    { label: s.theme.mode === 'dark' ? 'Светлая тема' : 'Тёмная тема', accelerator: s.hotkeys.themeToggle || undefined, click: () => send('theme-toggle') },
-    { label: 'Материал', submenu: [['liquid', 'Жидкий'], ['glass', 'Стекло'], ['gradient', 'Градиент'], ['solid', 'Сплошной']].map(([v, label]) => ({ label, type: 'radio', checked: s.theme.style === v, click: set((x) => (x.theme.style = v)) })) },
-    { label: 'Характер', submenu: [['eyes', 'Глаза'], ['buddies', 'Человечки'], ['none', 'Никого']].map(([v, label]) => ({ label, type: 'radio', checked: s.island.character === v, click: set((x) => (x.island.character = v)) })) },
-    { label: 'Края как вода', type: 'checkbox', checked: s.theme.water !== false, click: set((x) => (x.theme.water = x.theme.water === false)) },
-    { label: 'Не беспокоить', type: 'checkbox', checked: !!s.dnd, click: set((x) => (x.dnd = !x.dnd)) },
-    { label: 'Спрятать на 30 минут', click: () => { island.hide(); clearTimeout(snoozeTimer); snoozeTimer = setTimeout(() => island.showInactive(), 30 * 60e3); } },
-    { type: 'separator' },
-    { label: 'Окно ИИ', click: openAiWindow },
-    { label: 'Настройки', click: () => openSettingsWindow() },
-    { label: 'Перезапустить', click: () => { app.relaunch(); app.quit(); } },
-    { label: 'Выход', click: () => app.quit() },
-  ]);
-  menu.popup({ window: island });
+function hideIsland(minutes) {
+  clearTimeout(snoozeTimer);
+  island.hide();
+  if (minutes > 0) snoozeTimer = setTimeout(showIsland, minutes * 60e3);
+}
+function showIsland() {
+  clearTimeout(snoozeTimer);
+  if (island && !island.isVisible()) island.showInactive();
 }
 
 function trayIcon() {
@@ -267,7 +272,7 @@ function startPolling() {
     try {
       const fg = await helper.fast('fg', {}, 3000);
       const ours = fg.pid === process.pid || BrowserWindow.getAllWindows().some((w) => String(w.getNativeWindowHandle().readBigUInt64LE()) === fg.hwnd);
-      if (!ours && fg.hwnd !== '0') lastExternal = fg;
+      if (!ours && fg.hwnd !== '0') { if (lastExternal && lastExternal.hwnd !== fg.hwnd) send('fg-change', fg.process || ''); lastExternal = fg; }
       services.clips.onSeq(fg.clipSeq, ours ? lastExternal : fg);
       const full = !ours && fg.fullscreen && S.settings.data.island.hideOnFullscreen;
       if (full !== fgFullscreen) { fgFullscreen = full; send('fullscreen', full); }
@@ -277,7 +282,7 @@ function startPolling() {
   // Cursor for eyes / glow / magnetic tilt, plus click-through outside the island:
   // the glow margin stays visible but clicks there reach the windows below.
   let last = '';
-  let ignoring = null;
+  ignoring = null;
   setInterval(() => {
     if (!island || island.isDestroyed()) return;
     const p = screen.getCursorScreenPoint();
@@ -486,6 +491,19 @@ function ipc() {
   h('sys:volume', () => sys.volume());
   h('sys:volume:set', (v) => sys.setVolume(v));
   h('sys:mute', (on) => sys.setMute(on));
+  // per-app volume mixer
+  h('sys:sessions', async () => {
+    const list = helper.arr(await helper.fast('sessions', {}, 4000).catch(() => []));
+    const out = new Map();
+    for (const s of list) {
+      const k = (s.name || '').toLowerCase();
+      if (!k || s.pid === 0 || /^(audiodg|system|idle|electron)$|helper$/.test(k) || out.has(k)) continue; // skip the island itself and helper processes
+      out.set(k, { ...s, icon: await appLogo(s.name).catch(() => null) });
+    }
+    return [...out.values()];
+  });
+  h('sys:appVolume', (name, level) => helper.fast('setAppVolume', { match: name, level }));
+  h('sys:appMute', (name, on) => helper.fast('setAppMute', { match: name, on }));
   h('sys:brightness', () => sys.brightness());
   h('sys:brightness:set', (v) => sys.setBrightness(v));
   h('sys:caffeine', (on) => {
@@ -506,6 +524,10 @@ function ipc() {
   h('agents:dismiss', (id) => services.agents.dismiss(id));
   h('agents:status', () => services.agents.status());
   h('agents:list', () => services.agents.list());
+  h('calls:list', () => services.calls.list());
+  h('calls:mic', (id) => services.calls.toggleMic(id));
+  h('calls:sound', (id) => services.calls.toggleSound(id));
+  h('calls:focus', (id) => services.calls.focus(id));
   h('agents:install', (which) => (which === 'codex' ? services.agents.installCodex() : services.agents.installClaude()));
   h('agents:uninstall', () => services.agents.uninstallClaude());
 
@@ -517,7 +539,7 @@ function ipc() {
   h('telegram:logout', () => services.telegram.logout());
 
   h('notifications:clear', () => { recent.length = 0; });
-  h('island:menu', (info) => showIslandMenu(info || {}));
+  h('island:hide', (minutes) => hideIsland(+minutes || 0));
   h('app:quit', () => app.quit());
   h('app:relaunch', () => { app.relaunch(); app.quit(); });
   h('win:close', (e) => BrowserWindow.fromWebContents(e.sender)?.close());
@@ -536,11 +558,17 @@ function debugShots() {
         c = JSON.parse(fs.readFileSync(cmdFile, 'utf8'));
         fs.rmSync(cmdFile);
         if (c.send) send(c.send[0], c.send[1]);
+        // { "input": [[type, x, y, delayMs], ...] }: mouse events straight into the island window
+        if (c.input) for (const [type, x, y, ms] of c.input) {
+          island.webContents.sendInputEvent({ type, x, y, button: 'left', clickCount: 1 });
+          if (ms) await new Promise((r) => setTimeout(r, ms));
+        }
         if (c.js) {
           const r = await island.webContents.executeJavaScript(c.js).catch((e) => 'ERR ' + e.message);
           fs.writeFileSync(path.join(dir, 'debug-js.txt'), String(typeof r === 'object' ? JSON.stringify(r) : r));
         }
       }
+      fs.writeFileSync(path.join(dir, 'debug-hit.json'), JSON.stringify({ ignoring, hitRects, cursor: screen.getCursorScreenPoint(), bounds: island.getBounds(), focused: island.isFocused() }));
       const img = await island.webContents.capturePage();
       fs.writeFileSync(path.join(dir, 'debug-island.png'), img.toPNG());
       if (settingsWin && !settingsWin.isDestroyed()) {
@@ -560,7 +588,24 @@ function debugShots() {
 }
 
 // ---------------- boot ----------------
+// AI sites opened through the user's own accounts (no API keys), in their own
+// persistent session; sign-in popups of those sites are allowed.
+function setupAiWeb() {
+  app.on('web-contents-created', (_e, wc) => {
+    if (wc.getType() !== 'webview') return;
+    wc.setWindowOpenHandler(() => ({ action: 'allow', overrideBrowserWindowOptions: { width: 520, height: 700, autoHideMenuBar: true, webPreferences: { partition: 'persist:aiweb' } } }));
+    wc.on('did-create-window', (win) => { send('ai-popup', true); win.on('closed', () => send('ai-popup', false)); });
+  });
+  app.on('web-contents-created', (_e, wc) => {
+    wc.on('will-attach-webview', (_ev, prefs, params) => {
+      delete prefs.preload; prefs.nodeIntegration = false; prefs.contextIsolation = true;
+      params.partition = 'persist:aiweb';
+    });
+  });
+}
+
 app.whenReady().then(() => {
+  setupAiWeb();
   S = storeMod.init();
   helper.init();
   const dataDir = storeMod.dir();
@@ -573,11 +618,12 @@ app.whenReady().then(() => {
   services.agents = createAgents({
     settings: S.settings, dataDir, emit: (ch, p) => {
       send(ch, p);
-      if (ch === 'agent-attention') notify({ kind: 'agent', title: p.kind === 'permission' ? `${p.project}: нужно разрешение` : p.kind === 'question' ? `${p.project}: вопрос` : `${p.project}: нужен ответ`, body: p.data?.detail || p.data?.message || p.data?.questions?.[0]?.question || '', icon: '✳', askId: p.id, sticky: p.kind !== 'notice' });
-      if (ch === 'agent-done') notify({ kind: 'agent', title: `${p.project}: задача готова`, body: p.source === 'codex' ? 'Codex закончил' : 'Claude Code закончил', icon: '✅', done: true });
+      if (ch === 'agent-attention') notify({ kind: 'agent', source: p.source, title: p.kind === 'permission' ? `${p.project}: нужно разрешение` : p.kind === 'question' ? `${p.project}: вопрос` : `${p.project}: нужен ответ`, body: p.data?.detail || p.data?.message || p.data?.questions?.[0]?.question || '', icon: '✳', askId: p.id, sticky: p.kind !== 'notice' });
+      if (ch === 'agent-done') notify({ kind: 'agent', source: p.source, title: `${p.project}: задача готова`, body: p.source === 'codex' ? 'Codex закончил' : 'Claude Code закончил', icon: '✅', done: true });
     },
   });
   services.telegram = createTelegram({ settings: S.settings, emit: (ch, p) => (ch === 'notification' ? notify(p) : sendAll(ch, p)), ask: (k, l) => services.telegramAsk(k, l) });
+  services.calls = createCalls({ emit: send, notify });
   const toasts = sys.createToastWatcher({ state: S.state, emit: notify, enabled: () => S.settings.data.notifications.windows });
 
   // System audio loopback for the beat-reactive edge.
@@ -593,6 +639,7 @@ app.whenReady().then(() => {
   services.media.start();
   services.agents.start();
   toasts.start();
+  services.calls.start();
   if (S.settings.data.notifications.telegram && S.settings.data.telegram.session) services.telegram.start();
   startPolling();
   applySettings();
@@ -601,16 +648,17 @@ app.whenReady().then(() => {
   tray = new Tray(trayIcon());
   tray.setToolTip('Island');
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Открыть остров', click: () => { clearTimeout(snoozeTimer); island.showInactive(); island.focus(); send('island-toggle', true); } },
+    { label: 'Открыть остров', click: () => { showIsland(); island.focus(); send('island-toggle', true); } },
+    { label: 'Скрыть остров', click: () => hideIsland(0) },
     { label: 'Настройки', click: () => openSettingsWindow() },
     { label: 'Окно ИИ', click: openAiWindow },
     { type: 'separator' },
     { label: 'Перезапустить', click: () => { app.relaunch(); app.quit(); } },
     { label: 'Выход', click: () => app.quit() },
   ]));
-  tray.on('click', () => { clearTimeout(snoozeTimer); island.showInactive(); island.focus(); send('island-toggle', true); });
+  tray.on('click', () => { if (!island.isVisible()) { showIsland(); return; } island.focus(); send('island-toggle', true); });
 });
 
-app.on('second-instance', () => { island?.focus(); send('island-toggle', true); });
+app.on('second-instance', () => { showIsland(); island?.focus(); send('island-toggle', true); });
 app.on('window-all-closed', (e) => e.preventDefault?.());
 app.on('will-quit', () => { globalShortcut.unregisterAll(); helper.stop(); storeMod.flushAll(); });

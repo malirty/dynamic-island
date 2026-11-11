@@ -63,8 +63,13 @@ function render(animate) {
     h('div', { class: 'sub' }, `${dirName(c.wind_direction_10m)} · порывы ${Math.round(c.wind_gusts_10m || 0)} м/с`),
     h('div', { class: 'compass' }, h('span', { class: 'n', style: 'left:50%;top:3px;transform:translateX(-50%)' }, 'С'), h('span', { class: 'n', style: 'right:4px;top:50%;transform:translateY(-50%)' }, 'В'), h('span', { class: 'n', style: 'left:50%;bottom:3px;transform:translateX(-50%)' }, 'Ю'), h('span', { class: 'n', style: 'left:4px;top:50%;transform:translateY(-50%)' }, 'З'), needle)));
   // humidity
-  const hum = h('div', { class: 'humfill', style: { height: animate ? '0%' : c.relative_humidity_2m + '%' } });
-  tiles.append(h('div', { class: 'tile' }, hum, h('div', { class: 'lab', html: `${icon('drop', 12)} Влажность`, style: 'position:relative' }), h('div', { class: 'val', style: 'position:relative' }, num(c.relative_humidity_2m, { suffix: '%' })), h('div', { class: 'sub', style: 'position:relative' }, c.relative_humidity_2m > 75 ? 'Сыро' : c.relative_humidity_2m < 35 ? 'Сухо' : 'Комфортно')));
+  const hv = c.relative_humidity_2m;
+  const uid = 'hd' + Math.random().toString(36).slice(2, 8);
+  const DROP = 'M30 3C30 3 7 31 7 48a23 23 0 0 0 46 0C53 31 30 3 30 3z';
+  const WAVE = 'M-60 6 q15 -6 30 0 t30 0 t30 0 t30 0 t30 0 t30 0 V90 H-60z';
+  const hum = h('div', { class: 'humdrop', style: { '--lv': animate ? 0 : hv / 100 }, html: `<svg viewBox="0 0 60 76" width="58" height="72"><defs><clipPath id="${uid}"><path d="${DROP}"/></clipPath><linearGradient id="${uid}g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fd0ff"/><stop offset="1" stop-color="#2b6be0"/></linearGradient></defs><g clip-path="url(#${uid})"><rect width="60" height="76" fill="rgba(120,190,255,.08)"/><g class="hwater"><path class="hw2" d="${WAVE}" fill="rgba(150,210,255,.45)"/><path class="hw1" d="${WAVE}" fill="url(#${uid}g)"/></g></g><path d="${DROP}" fill="none" stroke="rgba(140,200,255,.6)" stroke-width="2"/><ellipse cx="21" cy="40" rx="3" ry="7" fill="rgba(255,255,255,.35)" transform="rotate(20 21 40)"/></svg>` });
+  tiles.append(h('div', { class: 'tile humtile' }, h('div', { class: 'lab', html: `${icon('drop', 12)} Влажность` }), h('div', { class: 'val' }, num(hv, { suffix: '%' })),
+    h('div', { class: 'sub' }, hv > 75 ? 'Сыро — воздух влажный' : hv < 35 ? 'Сухо — пей воду' : 'Комфортно'), c.dew_point_2m != null ? h('div', { class: 'sub' }, `Точка росы ${Math.round(c.dew_point_2m)}°`) : '', hum));
   // pressure gauge (mmHg)
   const mm = c.pressure_msl * 0.750062;
   const gauge = h('div', { class: 'gauge' });
@@ -72,11 +77,17 @@ function render(animate) {
   tiles.append(h('div', { class: 'tile' }, h('div', { class: 'lab', html: `${icon('gauge', 12)} Давление` }), h('div', { class: 'val' }, num(Math.round(mm)), h('span', { style: 'font-size:13px;font-weight:500' }, ' мм')), h('div', { class: 'sub' }, mm < 745 ? 'Пониженное' : mm > 765 ? 'Повышенное' : 'Нормальное'), gauge));
   // sun arc
   const rise = new Date(day.sunrise[0]).getTime(), set = new Date(day.sunset[0]).getTime();
-  const k = Math.max(0, Math.min(1, (Date.now() - rise) / (set - rise)));
-  const ang = Math.PI * (1 - k);
+  // position along the dashed arc (a quadratic curve from sunrise on the left to sunset on the right)
+  const now = Date.now();
+  const k = Math.max(0, Math.min(1, (now - rise) / (set - rise)));
+  const sunX = 5 + 190 * k, sunY = 48 - 2 * (1 - k) * k * 88;
+  const up = now >= rise && now <= set;
+  const left = up ? set - now : now < rise ? rise - now : null;
+  const hm = (ms) => `${Math.floor(ms / 3600e3)} ч ${Math.round((ms % 3600e3) / 60000)} мин`;
+  const sunNote = up ? `До заката ${hm(left)}` : now < rise ? `До восхода ${hm(left)}` : `Солнце село в ${tm(day.sunset[0])}`;
   const dot = h('div');
-  dot.innerHTML = `<svg viewBox="0 0 200 50" preserveAspectRatio="none"><path d="M5 48 Q100 -40 195 48" fill="none" stroke="var(--line)" stroke-width="2" stroke-dasharray="4 4"/><line x1="0" y1="48" x2="200" y2="48" stroke="var(--line)"/><circle class="dot" r="7" fill="#ffd36e" style="filter:drop-shadow(0 0 6px #ffb020)" cx="${animate ? 5 : 100 - Math.cos(ang) * 95}" cy="${animate ? 48 : 48 - Math.sin(ang) * 44}"/></svg>`;
-  tiles.append(h('div', { class: 'tile' }, h('div', { class: 'lab', html: `${icon('sun', 12)} Солнце` }), h('div', { class: 'val', style: 'font-size:20px' }, `${tm(day.sunrise[0])} – ${tm(day.sunset[0])}`), h('div', { class: 'sub' }, `Световой день ${Math.floor((set - rise) / 3600e3)} ч ${Math.round(((set - rise) % 3600e3) / 60000)} мин`), h('div', { class: 'sunarc' }, dot)));
+  dot.innerHTML = `<svg viewBox="0 0 200 50" preserveAspectRatio="none"><path d="M5 48 Q100 -40 195 48" fill="none" stroke="var(--line)" stroke-width="2" stroke-dasharray="4 4"/><line x1="0" y1="48" x2="200" y2="48" stroke="var(--line)"/><path d="M5 48 Q100 -40 195 48" fill="none" stroke="#ffb020" stroke-width="2.4" stroke-linecap="round" pathLength="100" stroke-dasharray="${(k * 100).toFixed(1)} 200" opacity=".75"/><circle class="dot" r="7" fill="${up ? '#ffd36e' : '#8e8aa8'}" style="filter:drop-shadow(0 0 6px ${up ? '#ffb020' : 'transparent'})" cx="${animate ? 5 : sunX}" cy="${animate ? 48 : sunY}"/></svg>`;
+  tiles.append(h('div', { class: 'tile' }, h('div', { class: 'lab', html: `${icon('sun', 12)} Солнце` }), h('div', { class: 'val', style: 'font-size:20px' }, `${tm(day.sunrise[0])} – ${tm(day.sunset[0])}`), h('div', { class: 'sub' }, `Световой день ${hm(set - rise)}`), h('div', { class: 'sub' }, sunNote), h('div', { class: 'sunarc' }, dot)));
   // precipitation
   const next = hr.precipitation.slice(nowIdx, nowIdx + 12);
   const maxP = Math.max(0.5, ...next);
@@ -100,18 +111,19 @@ function render(animate) {
       h('div', { style: 'font-size:18px' }, w.icon),
       h('div', { class: 'muted', style: 'text-align:right' }, Math.round(day.temperature_2m_min[i]) + '°'),
       h('div', { class: 'range' }, bar),
-      h('div', { style: 'font-weight:650' }, Math.round(day.temperature_2m_max[i]) + '°', h('div', { class: 'pp' }, day.precipitation_probability_max[i] >= 30 ? `💧${day.precipitation_probability_max[i]}%` : ''))));
+      h('div', { style: 'font-weight:650' }, Math.round(day.temperature_2m_max[i]) + '°', h('div', { class: 'pp' }, day.precipitation_probability_max[i] >= 30 ? `${day.precipitation_probability_max[i]}%` : '')),
+      h('div', { class: 'dsun' }, h('span', { html: icon('sunrise', 13) }), tm(day.sunrise[i]), h('span', { html: icon('sunset', 13) }), tm(day.sunset[i]))));
   });
   pin.append(h('div', { class: 'h2' }, 'Прогноз на неделю'), days);
   pin.append(h('div', { class: 'muted small', style: 'text-align:center' }, `Open-Meteo · обновлено ${new Date(d.fetched).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`));
 
   if (animate) requestAnimationFrame(() => requestAnimationFrame(() => {
     needle.style.transform = `rotate(${c.wind_direction_10m}deg)`;
-    hum.style.height = c.relative_humidity_2m + '%';
+    hum.style.setProperty('--lv', c.relative_humidity_2m / 100);
     gauge.style.setProperty('--g', gk);
     const circ = dot.querySelector('circle');
-    circ.setAttribute('cx', 100 - Math.cos(ang) * 95);
-    circ.setAttribute('cy', 48 - Math.sin(ang) * 44);
+    circ.setAttribute('cx', sunX);
+    circ.setAttribute('cy', sunY);
     uvDot.style.left = Math.min(100, (uv / 11) * 100) + '%';
     for (const b of bars.children) b.style.height = b.dataset.h;
     for (const b of days.querySelectorAll('.range i')) { b.style.left = b.dataset.l + '%'; b.style.right = b.dataset.r + '%'; }

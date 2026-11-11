@@ -1,6 +1,6 @@
-import { api, bus, state, $, h, esc, icon, debounce, saveSettings } from '../core.js';
+import { api, bus, state, $, h, esc, icon, debounce, saveSettings, EYE_FX } from '../core.js';
 import { QUICK } from './home.js';
-import { TILES } from './control.js';
+import { TILES, CC_DEFAULTS, TOGGLE_IDS, POWER } from './control.js';
 
 let root, ctx, hintBox;
 const S = () => state.settings;
@@ -42,16 +42,21 @@ const DESC_BY_TITLE = {
 
 const isDark = (m) => m !== 'light';
 function baseFor(style, mode, solid) {
+  if (style === 'white') return '#ffffff';
+  if (style === 'black') return '#000000';
   if (style === 'glass') return isDark(mode) ? 'rgba(22,22,32,.66)' : 'rgba(255,255,255,.6)';
   if (style === 'solid') return isDark(mode) ? solid : '#f7f7fa';
   return isDark(mode) ? 'rgba(6,6,10,.94)' : 'rgba(250,250,253,.9)';
 }
-const eyesMini = (cls = '') => `<div class="eyes ${cls}"><div class="eye"></div><div class="eye"></div></div>`;
+const eyesMini = (cls = '') => `<div class="eyes ${cls}"><div class="eye"></div><div class="eye"></div>${EYE_FX}</div>`;
 // a miniature island built from the same layers as the real one
 function pill(o = {}) {
   const t = S().theme;
-  const style = o.style || t.style, mode = o.mode || t.mode, colors = o.colors || t.colors;
-  const op = { liquid: [0.55, 0, 0], gradient: [0.2, 1, 0], glass: [0.35, 0, 1], solid: [0, 0, 0] }[style] || [0.5, 0, 0];
+  const style = o.style || t.style;
+  const plainP = { white: ['light', ['#d9d9e1', '#c7c7d1', '#ececf1'], '#9d9daa'], black: ['dark', ['#2c2c33', '#1d1d22', '#3a3a42'], '#6e6e7a'] }[style];
+  const mode = plainP ? plainP[0] : o.mode || t.mode, colors = plainP ? plainP[1] : o.colors || t.colors;
+  if (plainP) o = { ...o, glowColor: plainP[2] };
+  const op = { mood: [0.62, 0, 0], liquid: [0.55, 0, 0], gradient: [0.2, 1, 0], glass: [0.35, 0, 1], solid: [0, 0, 0], white: [0, 0, 0], black: [0, 0, 0] }[style] || [0.5, 0, 0];
   const glow = o.glow ?? t.glow;
   const vars = `--c1:${colors[0]};--c2:${colors[1]};--c3:${colors[2]};--glow:${o.glowColor || colors[0]};--glowK:${glow};--liquidOp:${op[0]};--flowOp:${op[1]};--glassOp:${op[2]};--base:${baseFor(style, mode, t.solid)};${o.vars || ''}`;
   return `<div class="mp ${o.cls || ''}" data-mode="${mode}" style="${vars}"><div class="ib"><div class="flow"></div><div class="liquid"><i></i><i></i><i></i></div><div class="glassrim"></div>${o.sheen ? '<div class="mpsheen"></div>' : ''}</div><div class="mpc">${o.content ?? `<span class="d">ср, 11</span>${eyesMini()}<span>10:42</span>`}</div>${o.after || ''}</div>`;
@@ -61,7 +66,7 @@ const chipsGrid = (items) => `<div class="mpgrid">${items.map(([ic, label]) => `
 
 const PREVIEW = {
   theme: () => `<div class="mprow">${['dark', 'light'].map((m) => `<div class="mpcol">${pill({ mode: m, cls: 'sm', content: eyesMini() })}${cap(m === 'dark' ? 'Тёмная' : 'Светлая', S().theme.mode === m)}</div>`).join('')}</div>`,
-  material: () => `<div class="mprow wrap">${[['liquid', 'Жидкий'], ['glass', 'Стекло'], ['gradient', 'Градиент'], ['solid', 'Сплошной']].map(([st, l]) => `<div class="mpcol">${pill({ style: st, content: eyesMini() , cls: 'sm' })}${cap(l, S().theme.style === st)}</div>`).join('')}</div>`,
+  material: () => `<div class="mprow wrap">${[['mood', 'По умолч.'], ['liquid', 'Жидкий'], ['glass', 'Стекло'], ['gradient', 'Градиент'], ['solid', 'Сплошной']].map(([st, l]) => `<div class="mpcol">${pill({ style: st, content: eyesMini() , cls: 'sm' })}${cap(l, S().theme.style === st)}</div>`).join('')}</div>`,
   colors: () => `${pill({ cls: 'big' })}<div class="mprow" style="margin-top:8px">${S().theme.colors.map((c) => `<i class="dot" style="background:${c}"></i>`).join('')}</div>`,
   glow: () => `${pill({ cls: 'glowing big' })}<div class="mpl">Сила ${Math.round(S().theme.glow * 100)}%</div>`,
   cover: () => S().theme.coverGlow
@@ -78,11 +83,14 @@ const PREVIEW = {
     const ch = S().island.character;
     const content = ch === 'none' ? '<span class="d">ср, 11</span><span>10:42</span>' : undefined;
     const after = ch === 'buddies' ? `<div class="mpbud"><i>${eyesMini('b')}</i><i>${eyesMini('b')}</i></div>` : '';
-    return pill({ content, after, cls: 'big' }) + cap({ eyes: 'Глаза', buddies: 'Человечки', none: 'Никого' }[ch], true);
+    // every emotion the eyes can show, live (they animate here too)
+    const emo = [['', 'спокоен'], ['e-sleepy', 'сонный'], ['e-sleep', 'спит'], ['e-angry', 'злится'], ['e-shy', 'смущается'], ['e-busy', 'занят'], ['e-think', 'думает'], ['e-idea', 'придумал'], ['e-ponder', 'размышляет'], ['e-sad', 'грустит'], ['e-joy', 'радуется'], ['e-dance', 'танцует'], ['e-startle', 'удивлён']];
+    const grid = ch === 'none' ? '' : `<div class="mpemo">${emo.map(([c, l]) => `<div class="mpcol">${pill({ cls: 'emo', content: eyesMini(c) })}<div class="mpl">${l}</div></div>`).join('')}</div>`;
+    return pill({ content, after, cls: 'big' }) + cap({ eyes: 'Глаза', buddies: 'Человечки', none: 'Никого' }[ch], true) + grid;
   },
   seconds: () => pill({ content: `<span class="d">ср, 11</span>${eyesMini()}<span>${S().island.showSeconds ? '10:42:17' : '10:42'}</span>`, cls: 'big' }),
   fullscreen: () => `<div class="mpscreen ${S().island.hideOnFullscreen ? 'hiding' : ''}">${pill({ cls: 'sm' })}<span>${S().island.hideOnFullscreen ? 'кино на весь экран' : 'остров остаётся'}</span></div>`,
-  sleep: () => pill({ cls: 'big', content: `<span class="d">ср, 11</span>${eyesMini('sleepy')}<span>10:42</span>` }) + cap(`засыпает через ${S().island.sleepAfterMin} мин`, true),
+  sleep: () => pill({ cls: 'big', content: `<span class="d">ср, 11</span>${eyesMini('e-sleepy')}<span>10:42</span>` }) + cap(`засыпает через ${S().island.sleepAfterMin} мин`, true),
   autostart: () => `<div class="mpbig">${icon('power', 26)}</div>` + cap(S().island.autostart ? 'запускается с Windows' : 'запуск вручную', S().island.autostart),
   quick: () => chipsGrid(S().quickActions.filter((id) => QUICK[id]).map((id) => [QUICK[id].icon, QUICK[id].label])),
   tiles: () => chipsGrid(S().controlTiles.filter((id) => TILES[id]).map((id) => [TILES[id].icon, TILES[id].label])) + `<div class="mpl">${S().controlSliders.map((x) => (x === 'volume' ? '🔊 громкость' : '☀ яркость')).join(' · ') || 'без ползунков'}</div>`,
@@ -124,6 +132,10 @@ const commitSoon = (() => { const s = debounce(saveSettings, 350); return () => 
 
 function row(label, sub, control, ht, hd) {
   return h('div', { class: 'srow', ...hint(ht || label, hd || sub || '') }, h('div', { class: 'sl2' }, label, sub ? h('small', {}, sub) : ''), control);
+}
+// label on top, control under it (for wide controls)
+function rowWide(label, sub, control, ht, hd) {
+  return h('div', { class: 'srow wide', ...hint(ht || label, hd || sub || '') }, h('div', { class: 'sl2' }, label, sub ? h('small', {}, sub) : ''), control);
 }
 function toggle(get, set) {
   const t = h('div', { class: 'toggle' + (get() ? ' on' : '') });
@@ -209,19 +221,47 @@ function render() {
   const presets = h('div', { class: 'presets' }, ...PRESETS.map((p) => h('div', { class: 'preset', style: { background: `linear-gradient(90deg, ${p.join(',')})` }, onclick: () => { s.theme.colors = [...p]; commit(); render(); showHint('Палитры', 'Нажми — и остров перекрасится целиком.', 'colors', true); } })));
   add('look', ...group('Внешний вид',
     row('Тема', 'светлая или тёмная', seg([['dark', 'Тёмная'], ['light', 'Светлая']], () => s.theme.mode, (v) => (s.theme.mode = v)), 'Тема', `Цвет самого острова. Переключается одной клавишей: ${s.hotkeys.themeToggle}.`),
-    row('Материал', null, seg([['liquid', 'Жидкий'], ['glass', 'Стекло'], ['gradient', 'Градиент'], ['solid', 'Сплошной']], () => s.theme.style, (v) => (s.theme.style = v)), 'Материал острова', 'Жидкий — цветные переливы под тёмной поверхностью. Стекло — полупрозрачный с бликами. Градиент — бегущий цветной градиент. Сплошной — классическая чёрная пилюля.'),
+    rowWide('Материал', null, seg([['mood', 'По умолчанию'], ['liquid', 'Жидкий'], ['glass', 'Стекло'], ['gradient', 'Градиент'], ['solid', 'Сплошной']], () => s.theme.style, (v) => { if (['white', 'black'].includes(s.theme.style)) s.theme.mode = s.theme.style === 'white' ? 'light' : 'dark'; s.theme.style = v; }), 'Материал острова', 'По умолчанию — остров сам меняет цвет по настроению: красный, когда злится или случилась ошибка, фиолетовый, когда сонный, голубой, когда занят, синий, когда думает, тёплый, когда радуется, и цвет обложки под музыку. Жидкий — цветные переливы под тёмной поверхностью. Стекло — полупрозрачный с бликами. Градиент — бегущий цветной градиент. Сплошной — классическая чёрная пилюля.'),
     row('Цвета', 'три цвета переливов и ободка', colors, 'Цвета', 'Из этих цветов собираются жидкие переливы, градиент и светящийся ободок острова.'),
-    row('Готовые палитры', null, presets, 'Палитры', 'Нажми — и остров перекрасится целиком.'),
-    row('Сила свечения', null, range(0, 1.5, 0.05, () => s.theme.glow, (v) => (s.theme.glow = v)), 'Свечение', 'Насколько ярко светится край острова и ореол вокруг него.'),
+    rowWide('Готовые палитры', null, presets, 'Палитры', 'Нажми — и остров перекрасится целиком.'),
     row('Край в цвет обложки', null, toggle(() => s.theme.coverGlow, (v) => (s.theme.coverGlow = v)), 'Цвет обложки', 'Когда играет музыка, край острова светится главным цветом обложки трека.'),
     row('Края как вода', 'тянутся к курсору, идут рябью', toggle(() => s.theme.water !== false, (v) => (s.theme.water = v)), 'Жидкие края', 'Край острова ведёт себя как поверхность воды: тянется к подведённому курсору, расходится рябью, когда входишь в остров, и слегка колышется в покое.'),
     row('Волны под музыку', 'свечение снизу и круги', toggle(() => s.theme.edgeDance, (v) => (s.theme.edgeDance = v)), 'Волны под музыку', 'Пока играет трек, низ острова светится цветом обложки, а на каждый удар баса край вздрагивает и от него расходятся светящиеся круги, как по воде.'),
-    row('Свет за курсором', null, toggle(() => s.theme.cursorGlow, (v) => (s.theme.cursorGlow = v)), 'Свет за курсором', 'Мягкий блик по поверхности острова следует за мышью, а ободок разгорается, когда курсор рядом.'),
     row('Остров тянется к курсору', null, toggle(() => s.theme.reactive, (v) => (s.theme.reactive = v)), 'Реакция на движения', 'Когда подводишь мышь, остров слегка наклоняется и тянется к ней, как живой.'),
     row('Размер', null, range(0.85, 1.3, 0.05, () => s.theme.scale, (v) => (s.theme.scale = v)), 'Размер', 'Масштаб компактной пилюли.')));
 
+  const glowColor = (() => {
+    const auto = h('button', { class: 'btn sm' + (s.theme.glowColor ? '' : ' pri') }, 'Авто');
+    const sw = h('label', { class: 'swatch', style: { background: s.theme.glowColor || 'conic-gradient(#ff4fd8, #7c5cff, #00d4ff, #34d399, #ffd23f, #ff4fd8)' } });
+    const inp = h('input', { type: 'color', value: s.theme.glowColor || '#7c5cff' });
+    inp.oninput = () => { s.theme.glowColor = inp.value; sw.style.background = inp.value; auto.classList.remove('pri'); bus.emit('settings', s); commitSoon(); };
+    auto.onclick = () => { s.theme.glowColor = ''; auto.classList.add('pri'); sw.style.background = 'conic-gradient(#ff4fd8, #7c5cff, #00d4ff, #34d399, #ffd23f, #ff4fd8)'; commit(); };
+    sw.append(inp);
+    return h('div', { class: 'row' }, auto, sw);
+  })();
+  add('look', ...group('Свечение',
+    row('Сила свечения', 'ореол и ободок', range(0, 1.5, 0.05, () => s.theme.glow, (v) => (s.theme.glow = v)), 'Свечение', 'Насколько ярко светится край острова и ореол вокруг него.'),
+    row('Цвет свечения', 'авто — по теме, настроению и обложке', glowColor, 'Цвет свечения', 'Авто: свечение берёт цвет темы, настроения персонажа и обложки трека. Или выбери один свой цвет.'),
+    row('Свет за курсором', null, toggle(() => s.theme.cursorGlow, (v) => (s.theme.cursorGlow = v)), 'Свет за курсором', 'Мягкий блик по поверхности острова следует за мышью, а ободок разгорается, когда курсор рядом.'),
+    row('Яркость света у курсора', null, range(0, 1.5, 0.05, () => s.theme.cursorGlowK ?? 1, (v) => (s.theme.cursorGlowK = v)), 'Свет у курсора', 'Насколько ярко ободок и волны вспыхивают рядом с мышью.'),
+    row('Свечение под музыку', 'низ острова и круги', range(0, 1.5, 0.05, () => s.theme.musicGlowK ?? 1, (v) => (s.theme.musicGlowK = v)), 'Свечение под музыку', 'Яркость цветного свечения снизу острова, пока играет трек.')));
+
+  add('island', ...group('Персонаж',
+    row('Трюки сами по себе', 'крутится, прыгает, подмигивает', seg([['off', 'Выкл'], ['rare', 'Редко'], ['normal', 'Обычно'], ['often', 'Часто']], () => s.island.trickRate || 'normal', (v) => (s.island.trickRate = v)), 'Трюки', 'Как часто персонаж сам что-то вытворяет, когда ничего не происходит: крутится, прыгает, подмигивает, хихикает, выглядывает, пускает сердечки.'),
+    row('Реагирует на курсор', 'любопытство и смущение', toggle(() => s.island.cursorReactions !== false, (v) => (s.island.cursorReactions = v)), 'Реакции на курсор', 'Глаза увеличиваются, когда мышь подходит близко; смущается, если медленно подвести курсор или задержать его на острове.'),
+    row('Тянется к курсору', 'из центра — ближе к мыши', toggle(() => s.island.walk !== false, (v) => (s.island.walk = v)), 'Тянется к курсору', 'Персонаж стоит по центру, а когда мышь рядом — тянется к ней, слегка вытягиваясь, и мягко возвращается обратно.'),
+    row('Эффекты над головой', 'загрузка, лампочка, ноты…', toggle(() => s.island.moodFx !== false, (v) => (s.island.moodFx = v)), 'Эффекты', 'Значки над персонажем: колечко загрузки, когда думает, точки, когда занят, лампочка, ноты, zZ, сердечки, искры радости.'),
+    row('Цвет глаз', 'в спокойном настроении', h('div', { class: 'row' }, h('button', { class: 'btn sm' + (s.island.eyeColor ? '' : ' pri'), onclick: () => { s.island.eyeColor = ''; commit(); render(); } }, 'Авто'), (() => { const sw = h('label', { class: 'swatch', style: { background: s.island.eyeColor || '#ffffff' } }); const inp = h('input', { type: 'color', value: s.island.eyeColor || '#ffffff' }); inp.oninput = () => { s.island.eyeColor = inp.value; sw.style.background = inp.value; bus.emit('settings', s); commitSoon(); }; sw.append(inp); return sw; })()), 'Цвет глаз', 'Авто — белые на тёмном острове и тёмные на светлом. Эмоции всё равно красят глаза по-своему.'),
+    row('Чувствительность к битам', 'как часто дёргается под музыку', seg([['low', 'Низкая'], ['normal', 'Обычная'], ['high', 'Высокая']], () => s.theme.beatSens || 'normal', (v) => (s.theme.beatSens = v)), 'Биты', 'Высокая — край, волны и персонаж реагируют почти на каждый удар; низкая — только на сильные.')));
+
+  add('island', ...group('Поведение',
+    row('Мини-остров через', 'сколько держать курсор', range(0.6, 4, 0.1, () => s.island.miniDelay ?? 1.5, (v) => (s.island.miniDelay = v)), 'Мини-остров', 'Если задержать курсор на острове на это время, откроется мини-остров (плеер или часы с быстрыми действиями).'),
+    row('Кружков активностей сбоку', null, range(1, 6, 1, () => s.island.maxBubbles ?? 4, (v) => (s.island.maxBubbles = v)), 'Кружки', 'Сколько активностей одновременно показывать кружками справа от острова.'),
+    row('Прятать жестом вверх', 'зажми остров и потяни вверх', toggle(() => s.island.swipeHide !== false, (v) => (s.island.swipeHide = v)), 'Жест вверх', 'Зажми остров и потяни вверх — он спрячется. Чтобы вернуть, уведи курсор и снова подведи его к центру верхнего края экрана.')));
+
   add('island', ...group('Остров',
-    row('Характер', 'кто живёт на острове', seg([['eyes', 'Глаза'], ['buddies', 'Человечки'], ['none', 'Никого']], () => s.island.character, (v) => (s.island.character = v)), 'Характер', 'Глаза следят за курсором, задумываются, пока думает нейросеть, радуются готовому, вздрагивают от уведомлений и засыпают, когда тебя долго нет. Человечки ещё и танцуют под музыку.'),
+    rowWide('Кто живёт на острове', null, seg([['eyes', 'Глаза'], ['cat', 'Котик'], ['bunny', 'Зайка'], ['robot', 'Робот'], ['ghost', 'Призрак'], ['alien', 'Пришелец'], ['angel', 'Ангел'], ['frog', 'Лягушка'], ['devil', 'Чертёнок'], ['buddies', 'Человечки'], ['none', 'Никого']], () => s.island.character, (v) => (s.island.character = v)), 'Характер', 'У глаз есть эмоции: следят за курсором, танцуют под музыку, думают, пока отвечает ИИ, заняты, пока работает агент или идёт загрузка, радуются готовому, вздрагивают от уведомлений, злятся на ошибки и если их тыкать, становятся сонными и засыпают, когда тебя долго нет. Человечки ещё и раскачиваются в такт.'),
+    row('Плеер на острове', 'трек в пилюле и мини-плеер', toggle(() => s.island.showPlayer !== false, (v) => (s.island.showPlayer = v)), 'Плеер на острове', 'Показывать играющий трек в пилюле, в капле и в мини-острове. Если выключить, плеер пропадёт с острова, но остров всё равно будет танцевать под музыку: края, волны, свечение и глаза.'),
     row('Секунды в часах', null, toggle(() => s.island.showSeconds, (v) => (s.island.showSeconds = v))),
     row('Прятать в полноэкранном режиме', 'фильмы и игры', toggle(() => s.island.hideOnFullscreen, (v) => (s.island.hideOnFullscreen = v)), 'Полноэкранный режим', 'Когда смотришь кино или играешь на весь экран, остров уезжает за край. Подведи мышь к центру верхнего края — и он появится.'),
     row('Засыпать через, мин', 'без активности', text(() => s.island.sleepAfterMin, (v) => (s.island.sleepAfterMin = +v || 5), { type: 'number', style: 'width:70px' }), 'Сон', 'Через сколько минут бездействия персонажи засыпают.'),
@@ -240,6 +280,41 @@ function render() {
     b.onclick = () => { s.controlTiles = s.controlTiles.includes(id) ? s.controlTiles.filter((x) => x !== id) : [...s.controlTiles, id]; b.classList.toggle('on'); commit(); };
     return b;
   }));
+  // pick up to `max` items; the newest choice pushes out the oldest
+  const pick = (items, key, max, hd) => h('div', hint(hd[0], hd[1]), h('div', { class: 'chips', style: 'padding:6px 10px 10px' }, ...items.map(([id, label]) => {
+    const cur = () => s[key] ?? CC_DEFAULTS[key] ?? [];
+    const b = h('button', { class: 'chip' + (cur().includes(id) ? ' on' : '') }, label);
+    b.onclick = () => {
+      const c = [...cur()];
+      s[key] = c.includes(id) ? c.filter((x) => x !== id) : [...c, id].slice(-max);
+      for (const x of b.parentNode.children) x.classList.toggle('on', s[key].includes(x._id));
+      commit();
+    };
+    b._id = id;
+    return b;
+  })));
+  const blk = (k, label, sub, hd) => row(label, sub, toggle(() => (s.ccBlocks || {})[k] !== false, (v) => { s.ccBlocks = { ...CC_DEFAULTS.ccBlocks, ...(s.ccBlocks || {}), [k]: v }; }), label, hd);
+  const toggles = TOGGLE_IDS.filter((id) => TILES[id]).map((id) => [id, TILES[id].label]);
+  add('actions', ...group('Центр управления — блоки',
+    blk('net', 'Связь', 'четыре круглые кнопки', 'Блок с круглыми кнопками: Wi-Fi, Bluetooth, VPN и т.д. Нажатие на название открывает подробности.'),
+    blk('media', 'Сейчас играет', 'обложка и кнопки трека', 'Карточка с текущим треком, обложкой и кнопками.'),
+    blk('focus', 'Не беспокоить', 'большая кнопка фокуса', 'Широкая кнопка режима «Не беспокоить».'),
+    blk('squares', 'Квадратные кнопки', 'две быстрые плитки', 'Две квадратные кнопки рядом с «Не беспокоить».'),
+    blk('sliders', 'Большие ползунки', 'громкость и яркость', 'Высокие ползунки как в iPhone: тяни или крути колёсиком.'),
+    blk('quick', 'Быстрые действия', 'четыре большие кнопки', 'Скриншот области, пипетка, QR, таймер и другие — до четырёх.'),
+    blk('tiles', 'Свои плитки', 'добавляются через «Изменить»', 'Дополнительные плитки под основными блоками.'),
+    blk('mixer', 'Громкость приложений', 'микшер', 'Отдельная громкость и кнопка «заглушить» для каждого приложения, которое сейчас играет звук.'),
+    blk('power', 'Питание', 'блокировка, сон, перезагрузка…', 'Кнопки блокировки, сна, перезагрузки и выключения.')));
+  add('actions', ...group('Центр управления — что внутри',
+    pick(toggles, 'ccNet', 4, ['Кнопки связи', 'Какие четыре круглые кнопки показывать в блоке «Связь».']),
+    h('div', { class: 'muted small', style: 'padding:0 12px' }, 'Круглые кнопки (до 4)'),
+    pick(toggles, 'ccSquares', 2, ['Квадратные кнопки', 'Две квадратные кнопки рядом с «Не беспокоить».']),
+    h('div', { class: 'muted small', style: 'padding:0 12px' }, 'Квадратные кнопки (до 2)'),
+    pick(Object.entries(QUICK).filter(([, q]) => !q.toggle).map(([id, q]) => [id, q.label]), 'controlQuick', 4, ['Быстрые действия центра', 'Четыре большие кнопки в центре управления.']),
+    h('div', { class: 'muted small', style: 'padding:0 12px' }, 'Быстрые действия (до 4)'),
+    pick(POWER.map(([id, label]) => [id, label]), 'ccPower', 4, ['Питание', 'Какие кнопки питания показывать.']),
+    h('div', { class: 'muted small', style: 'padding:0 12px 6px' }, 'Кнопки питания'),
+    row('Спрашивать «Точно?»', 'перед сном, перезагрузкой и выключением', toggle(() => s.ccConfirm !== false, (v) => (s.ccConfirm = v)), 'Подтверждение', 'Первое нажатие на сон, перезагрузку или выключение только спрашивает «Точно?», второе — выполняет.')));
   add('actions', ...group('Центр управления', h('div', hint('Плитки', 'Что показывать в центре управления. Например, убери Wi-Fi и поставь «Не засыпать».'), ct),
     row('Громкость', null, toggle(() => s.controlSliders.includes('volume'), (v) => (s.controlSliders = v ? [...new Set([...s.controlSliders, 'volume'])] : s.controlSliders.filter((x) => x !== 'volume')))),
     row('Яркость', 'только ноутбуки и мониторы с DDC', toggle(() => s.controlSliders.includes('brightness'), (v) => (s.controlSliders = v ? [...new Set([...s.controlSliders, 'brightness'])] : s.controlSliders.filter((x) => x !== 'brightness'))))));
@@ -247,6 +322,7 @@ function render() {
   // AI
   const keyRow = (id, label, url) => row(label, null, h('div', { class: 'row' }, text(() => s.ai.keys[id], (v) => (s.ai.keys[id] = v.trim()), { type: 'password', placeholder: 'API-ключ', style: 'width:180px' }), h('button', { class: 'btn sm ghost', onclick: () => api.invoke('url:open', url) }, 'Получить')), label, `Ключ хранится только на этом компьютере (%APPDATA%\\Island\\settings.json). Получить: ${url}`);
   add('ai', ...group('ИИ',
+    row('Как подключаться', null, seg([['web', 'Через аккаунт'], ['api', 'API-ключи']], () => s.ai.mode || 'web', (v) => (s.ai.mode = v)), 'Подключение', 'Через аккаунт — на вкладке ИИ открываются настоящие сайты Gemini, DeepSeek и ChatGPT, ты входишь в свой аккаунт (например Google), и никакие ключи не нужны. Вопросы из Alt+Space отправляются туда же. API-ключи — свой чат внутри острова с выбором модели и файлами.'),
     row('Нейросеть по умолчанию', null, seg([['gemini', 'Gemini'], ['deepseek', 'DeepSeek'], ['openai', 'ChatGPT'], ['ollama', 'Ollama']], () => s.ai.provider, (v) => (s.ai.provider = v)), 'Нейросеть', 'Кто отвечает в Alt+Space и в быстрых ИИ-действиях. В чате можно выбрать любую. Ollama — локальные модели без интернета и ключей.'),
     keyRow('gemini', 'Ключ Gemini', 'https://aistudio.google.com/apikey'),
     keyRow('deepseek', 'Ключ DeepSeek', 'https://platform.deepseek.com/api_keys'),

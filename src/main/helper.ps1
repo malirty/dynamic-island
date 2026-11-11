@@ -94,6 +94,13 @@ public static class IslandNative {
         for (int i = vks.Length - 1; i >= 0; i--) keybd_event((byte)vks[i], 0, 2, UIntPtr.Zero);
     }
 
+    public static bool FocusProcess(string name) {
+        foreach (Process p in Process.GetProcessesByName(name)) {
+            if (p.MainWindowHandle != IntPtr.Zero) return Focus(p.MainWindowHandle.ToInt64());
+        }
+        return false;
+    }
+
     public static bool Paste(long hwnd) {
         bool ok = true;
         if (hwnd != 0) { ok = Focus(hwnd); Thread.Sleep(90); }
@@ -112,6 +119,11 @@ public static class IslandAudio {
     interface IMMDeviceEnumerator {
         [PreserveSig] int EnumAudioEndpoints(int flow, int mask, out IntPtr devices);
         [PreserveSig] int GetDefaultAudioEndpoint(int flow, int role, out IMMDevice dev);
+    }
+    [Guid("0BD7A1BE-7A1A-44DB-8397-CC5392387B5E"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IMMDeviceCollection {
+        [PreserveSig] int GetCount(out uint n);
+        [PreserveSig] int Item(uint i, out IMMDevice dev);
     }
     [Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     interface IMMDevice {
@@ -201,6 +213,86 @@ public static class IslandAudio {
             res.Add(pid + "|" + name + "|" + v.ToString(System.Globalization.CultureInfo.InvariantCulture) + "|" + (m ? 1 : 0));
         }
         return res.ToArray();
+    }
+
+    // Default microphone (console + communications roles) mute
+    static IAudioEndpointVolume EndpointFor(int flow, int role) {
+        IMMDeviceEnumerator en = (IMMDeviceEnumerator)(new MMDeviceEnumeratorCo());
+        IMMDevice dev; Marshal.ThrowExceptionForHR(en.GetDefaultAudioEndpoint(flow, role, out dev));
+        Guid iid = typeof(IAudioEndpointVolume).GUID; object o;
+        Marshal.ThrowExceptionForHR(dev.Activate(ref iid, 23, IntPtr.Zero, out o));
+        return (IAudioEndpointVolume)o;
+    }
+    public static bool GetMicMute() {
+        bool m = false;
+        try { EndpointFor(1, 2).GetMute(out m); } catch { try { EndpointFor(1, 0).GetMute(out m); } catch { } }
+        return m;
+    }
+    public static void SetMicMute(bool on) {
+        Guid g = Guid.Empty;
+        try { EndpointFor(1, 0).SetMute(on, ref g); } catch { }
+        try { EndpointFor(1, 2).SetMute(on, ref g); } catch { }
+    }
+
+    // Mute / unmute everything a process plays (e.g. call audio). Returns sessions touched,
+    // or with on < 0 just reports whether all matching sessions are muted (1) or not (0).
+    public static int AppMute(string match, int on) {
+        int count = 0, muted = 0; match = match.ToLowerInvariant();
+        Guid iid = typeof(IAudioSessionManager2).GUID; object o;
+        Marshal.ThrowExceptionForHR(Speakers().Activate(ref iid, 23, IntPtr.Zero, out o));
+        IAudioSessionManager2 mgr = (IAudioSessionManager2)o;
+        IAudioSessionEnumerator en; mgr.GetSessionEnumerator(out en);
+        int n; en.GetCount(out n);
+        for (int i = 0; i < n; i++) {
+            IAudioSessionControl2 s; en.GetSession(i, out s);
+            uint pid; s.GetProcessId(out pid);
+            if (pid == 0) continue;
+            string name = "";
+            try { name = Process.GetProcessById((int)pid).ProcessName.ToLowerInvariant(); } catch { }
+            if (name.Length == 0 || !name.Contains(match)) continue;
+            ISimpleAudioVolume vol = (ISimpleAudioVolume)s;
+            Guid g = Guid.Empty;
+            if (on >= 0) vol.SetMute(on == 1, ref g);
+            bool m; vol.GetMute(out m); if (m) muted++;
+            count++;
+        }
+        if (on < 0) return count > 0 && muted == count ? 1 : 0;
+        return count;
+    }
+
+    // Mute the microphone of one app only: its capture sessions on every active
+    // recording device (works with virtual devices like Voicemeeter too).
+    // on < 0: report 1 if all of the app's capture sessions are muted.
+    public static int AppMicMute(string match, int on) {
+        int count = 0, muted = 0; match = match.ToLowerInvariant();
+        IMMDeviceEnumerator en = (IMMDeviceEnumerator)(new MMDeviceEnumeratorCo());
+        IntPtr colPtr;
+        Marshal.ThrowExceptionForHR(en.EnumAudioEndpoints(1, 1, out colPtr));
+        IMMDeviceCollection col = (IMMDeviceCollection)Marshal.GetObjectForIUnknown(colPtr);
+        Marshal.Release(colPtr);
+        uint nd; col.GetCount(out nd);
+        for (uint d = 0; d < nd; d++) {
+            IMMDevice dev; if (col.Item(d, out dev) != 0) continue;
+            Guid iid = typeof(IAudioSessionManager2).GUID; object o;
+            if (dev.Activate(ref iid, 23, IntPtr.Zero, out o) != 0) continue;
+            IAudioSessionEnumerator se; ((IAudioSessionManager2)o).GetSessionEnumerator(out se);
+            int n; se.GetCount(out n);
+            for (int i = 0; i < n; i++) {
+                IAudioSessionControl2 s; se.GetSession(i, out s);
+                uint pid; s.GetProcessId(out pid);
+                if (pid == 0) continue;
+                string name = "";
+                try { name = Process.GetProcessById((int)pid).ProcessName.ToLowerInvariant(); } catch { }
+                if (name.Length == 0 || !name.Contains(match)) continue;
+                ISimpleAudioVolume vol = (ISimpleAudioVolume)s;
+                Guid g = Guid.Empty;
+                if (on >= 0) vol.SetMute(on == 1, ref g);
+                bool m; vol.GetMute(out m); if (m) muted++;
+                count++;
+            }
+        }
+        if (on < 0) return count > 0 && muted == count ? 1 : 0;
+        return count;
     }
 
     public static int SetAppVolume(string match, float level) {
@@ -316,8 +408,13 @@ function Cmd-Media($a) {
     }
     if ($a.thumb -and $p.Thumbnail) {
         try {
+            # PowerShell can't bind AsStreamForRead() to a WinRT COM object directly,
+            # so invoke it through reflection.
             $ras = Await ($p.Thumbnail.OpenReadAsync()) ([Windows.Storage.Streams.IRandomAccessStreamWithContentType])
-            $st = [System.IO.WindowsRuntimeStreamExtensions]::AsStreamForRead($ras)
+            if (-not $script:asStreamForRead) {
+                $script:asStreamForRead = [System.IO.WindowsRuntimeStreamExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsStreamForRead' -and $_.GetParameters().Count -eq 1 } | Select-Object -First 1
+            }
+            $st = $script:asStreamForRead.Invoke($null, @($ras))
             $ms = New-Object System.IO.MemoryStream
             $st.CopyTo($ms); $st.Dispose()
             $r.thumb = [Convert]::ToBase64String($ms.ToArray())
@@ -437,6 +534,20 @@ function Cmd-Vpn($a) {
     @(Get-VpnConnection -ErrorAction SilentlyContinue | ForEach-Object { @{ name = $_.Name; status = [string]$_.ConnectionStatus; server = $_.ServerAddress } })
 }
 
+# Apps currently using the microphone: Windows keeps LastUsedTimeStop = 0 while in use.
+function Cmd-MicUsers($a) {
+    $base = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone'
+    $keys = @()
+    $keys += @(Get-ChildItem "$base\NonPackaged" -ErrorAction SilentlyContinue)
+    $keys += @(Get-ChildItem $base -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -ne 'NonPackaged' })
+    $out = @()
+    foreach ($k in $keys) {
+        $p = Get-ItemProperty -LiteralPath $k.PSPath -ErrorAction SilentlyContinue
+        if ($p -and $p.LastUsedTimeStart -and ($p.LastUsedTimeStop -eq 0)) { $out += [string]$k.PSChildName }
+    }
+    $out
+}
+
 function Cmd-StartApps($a) {
     @(Get-StartApps | ForEach-Object { @{ name = $_.Name; id = $_.AppID } })
 }
@@ -468,6 +579,15 @@ function Dispatch($c, $a) {
         'setBrightness' { return Cmd-SetBrightness $a }
         'vpn' { return Cmd-Vpn $a }
         'startApps' { return Cmd-StartApps $a }
+        'micUsers' { return @(Cmd-MicUsers $a) }
+        'micMute' { return @{ muted = [IslandAudio]::GetMicMute() } }
+        'setMicMute' { [IslandAudio]::SetMicMute([bool]$a.on); return @{ muted = [IslandAudio]::GetMicMute() } }
+        'appMute' { return @{ muted = ([IslandAudio]::AppMute([string]$a.match, -1) -eq 1) } }
+        'appMicMute' { return @{ muted = ([IslandAudio]::AppMicMute([string]$a.match, -1) -eq 1) } }
+        'setAppMicMute' { $n = [IslandAudio]::AppMicMute([string]$a.match, $(if ($a.on) { 1 } else { 0 })); return @{ count = $n } }
+        'setAppMute' { $n = [IslandAudio]::AppMute([string]$a.match, $(if ($a.on) { 1 } else { 0 })); return @{ count = $n } }
+        'focusProcess' { return @{ ok = [IslandNative]::FocusProcess([string]$a.name) } }
+        'procPath' { $pp = Get-Process -Name ([string]$a.name) -ErrorAction SilentlyContinue | Where-Object { $_.Path } | Select-Object -First 1; return @{ path = $(if ($pp) { $pp.Path } else { '' }) } }
         default { throw "unknown command: $c" }
     }
 }

@@ -40,8 +40,8 @@ module.exports = function createTelegram({ settings, emit, ask }) {
           const chat = event.isPrivate ? null : await m.getChat().catch(() => null);
           const name = sender ? [sender.firstName, sender.lastName].filter(Boolean).join(' ') || sender.title || sender.username : 'Telegram';
           emit('notification', {
-            kind: 'telegram', app: 'Telegram', title: chat?.title ? `${name} · ${chat.title}` : name,
-            body: m.message || (m.media ? '📎 Вложение' : ''), at: Date.now(),
+            kind: 'telegram', app: 'Telegram', logoHint: 'Telegram', title: chat?.title ? `${name} · ${chat.title}` : name,
+            body: m.message || (m.media ? 'Вложение' : ''), at: Date.now(),
           });
         } catch {}
       }, new NewMessage({ incoming: true }));

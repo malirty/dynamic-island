@@ -1,4 +1,4 @@
-import { api, bus, state, $, h, esc, icon, bytes } from '../core.js';
+import { api, bus, state, $, h, esc, icon, bytes, saveSettings } from '../core.js';
 import { md } from '../markdown.js';
 import { flags } from '../characters.js';
 
@@ -32,10 +32,90 @@ export function createChat(el, ctx, { standalone = false } = {}) {
     h('button', { class: 'ibtn', title: 'Прикрепить файл', html: icon('attach', 16), onclick: () => fileIn.click() }), micBtn,
     h('div', { class: 'grow' }), sendBtn));
   el.append(
-    h('div', { class: 'row' }, provSel, modelIn, models, h('div', { class: 'grow' }), chatSel,
+    h('div', { class: 'row api' }, modeSeg(), provSel, modelIn, models, h('div', { class: 'grow' }), chatSel,
       h('button', { class: 'ibtn', title: 'Новый чат', html: icon('plus', 16), onclick: () => newChat() }),
       !standalone ? h('button', { class: 'ibtn', title: 'Открыть в отдельном окне', html: icon('window', 16), onclick: () => { api.invoke('ai:window'); ctx.collapse(false); } }) : ''),
     msgs, composer, fileIn);
+
+  // ---------- account mode: the real Gemini / DeepSeek / ChatGPT sites, signed in with your account ----------
+  const SITES = {
+    gemini: { name: 'Gemini', url: 'https://gemini.google.com/app', sel: 'rich-textarea .ql-editor, div.ql-editor[contenteditable="true"], div[contenteditable="true"]' },
+    deepseek: { name: 'DeepSeek', url: 'https://chat.deepseek.com/', sel: 'textarea' },
+    chatgpt: { name: 'ChatGPT', url: 'https://chatgpt.com/', sel: '#prompt-textarea, div[contenteditable="true"], textarea' },
+  };
+  const web = h('div', { class: 'aiweb' });
+  const views = {};
+  const siteBtns = {};
+  const webBar = h('div', { class: 'row webbar' }, modeSeg(),
+    ...Object.entries(SITES).map(([id, s]) => (siteBtns[id] = h('button', { class: 'sitebtn', onclick: () => showSite(id) }, s.name))),
+    h('div', { class: 'grow' }),
+    h('button', { class: 'ibtn', title: 'Назад', html: icon('back', 15), onclick: () => cur()?.canGoBack() && cur().goBack() }),
+    h('button', { class: 'ibtn', title: 'Обновить', html: icon('restart', 15), onclick: () => cur()?.reload() }),
+    h('button', { class: 'ibtn', title: 'Открыть в браузере', html: icon('link', 15), onclick: () => api.invoke('url:open', cur()?.getURL() || SITES[site()].url) }),
+    !standalone ? h('button', { class: 'ibtn', title: 'Открыть в отдельном окне', html: icon('window', 16), onclick: () => { api.invoke('ai:window'); ctx.collapse(false); } }) : '');
+  el.append(webBar, web);
+  const site = () => (SITES[state.settings.ai.webSite] ? state.settings.ai.webSite : 'gemini');
+  const cur = () => views[site()];
+  function siteView(id) {
+    if (!views[id]) {
+      const wv = document.createElement('webview');
+      wv.setAttribute('partition', 'persist:aiweb');
+      wv.setAttribute('allowpopups', '');
+      wv.className = 'wv';
+      wv.src = SITES[id].url;
+      wv.addEventListener('dom-ready', () => { wv._ready = true; });
+      web.append(wv);
+      views[id] = wv;
+    }
+    return views[id];
+  }
+  function showSite(id) {
+    if (state.settings.ai.webSite !== id) { state.settings.ai.webSite = id; saveSettings(); }
+    siteView(id);
+    for (const [k, v] of Object.entries(views)) v.classList.toggle('on', k === id);
+    for (const [k, b] of Object.entries(siteBtns)) b.classList.toggle('on', k === id);
+  }
+  function modeSeg() {
+    const s = h('div', { class: 'seg aimode' });
+    for (const [v, label] of [['web', 'Аккаунт'], ['api', 'API-ключ']]) {
+      const b = h('button', { class: (state.settings.ai.mode || 'web') === v ? 'on' : '', title: v === 'web' ? 'Сайты нейросетей с входом в твой аккаунт — без ключей' : 'Свой чат через API-ключи' }, label);
+      b.onclick = () => setMode(v);
+      s.append(b);
+    }
+    return s;
+  }
+  let webActive = standalone; // in the island the sites load only once the AI tab is opened
+  function setMode(v) {
+    if ((state.settings.ai.mode || 'web') !== v) { state.settings.ai.mode = v; saveSettings(); }
+    el.classList.toggle('webmode', v === 'web');
+    for (const b of el.querySelectorAll('.aimode button')) b.classList.toggle('on', (b.textContent === 'Аккаунт') === (v === 'web'));
+    if (v === 'web' && webActive) showSite(site());
+  }
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  async function webAsk(text) {
+    webActive = true;
+    setMode('web');
+    const id = site();
+    const wv = siteView(id);
+    showSite(id);
+    if (!wv._ready) await new Promise((r) => wv.addEventListener('dom-ready', r, { once: true }));
+    for (let i = 0; i < 24; i++) {
+      const ok = await wv.executeJavaScript(`(() => { const el = document.querySelector(${JSON.stringify(SITES[id].sel)}); if (!el) return false; el.focus(); document.execCommand('insertText', false, ${JSON.stringify(text)}); return true; })()`).catch(() => false);
+      if (ok) {
+        await sleep(350);
+        wv.focus();
+        wv.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });
+        wv.sendInputEvent({ type: 'char', keyCode: '\r' });
+        wv.sendInputEvent({ type: 'keyUp', keyCode: 'Return' });
+        return true;
+      }
+      await sleep(500);
+    }
+    ctx.flash?.({ icon: '🤔', title: 'Сначала войди в аккаунт на сайте', ms: 2400 });
+    return false;
+  }
+  bus.on('ai-web-ask', (q) => { if (standalone || el.isConnected) webAsk(q); });
+  setTimeout(() => setMode(state.settings.ai.mode || 'web'), 0);
 
   function fillProviders() {
     provSel.innerHTML = '';
@@ -171,7 +251,7 @@ export function createChat(el, ctx, { standalone = false } = {}) {
       renderAll(); persist();
     };
     const offF = api.on('ai-done', (d) => { if (d.reqId === id) finish(); });
-    const offE = api.on('ai-error', (d) => { if (d.reqId !== id) return; reply.content = '⚠️ ' + d.error; reply.error = true; finish(); });
+    const offE = api.on('ai-error', (d) => { if (d.reqId !== id) return; reply.content = '⚠️ ' + d.error; reply.error = true; finish(); bus.emit('mood-flash', { mood: 'mood-angry', ms: 2600 }); });
     const history = chat.messages.slice(0, -1).filter((m) => !m.error).slice(-20).map((m) => ({ role: m.role, content: m.content, files: m.files }));
     api.invoke('ai:chat', id, { provider: provSel.value, model: modelIn.value.trim(), messages: history });
   }
@@ -209,7 +289,7 @@ export function createChat(el, ctx, { standalone = false } = {}) {
     }
   };
 
-  bus.on('ai-attach', (paths) => attachPaths(paths));
+  bus.on('ai-attach', (paths) => { if ((state.settings.ai.mode || 'web') === 'web') { ctx.flash?.({ icon: '📎', title: 'В режиме аккаунта перетащи файл прямо в чат на сайте', ms: 2800 }); return; } attachPaths(paths); });
   bus.on('drop-open', ({ paths, target }) => { if (el.closest('.page.on') && !target.closest?.('.shelfw')) attachPaths(paths); });
   bus.on('ai-continue', ({ q, a }) => {
     newChat();
@@ -225,7 +305,7 @@ export function createChat(el, ctx, { standalone = false } = {}) {
     if (!chat) newChat(); else { fillChats(); renderAll(); }
     fillProviders();
   });
-  return { focus: () => ta.focus() };
+  return { focus: () => ta.focus(), activate: () => { webActive = true; if ((state.settings.ai.mode || 'web') === 'web') showSite(site()); } };
 }
 
 let inst;
@@ -237,5 +317,5 @@ export default {
     el.style.paddingBottom = '12px';
     inst = createChat(box, ctx);
   },
-  show() { setTimeout(() => inst?.focus(), 80); },
+  show() { inst?.activate(); setTimeout(() => inst?.focus(), 80); },
 };

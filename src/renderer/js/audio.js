@@ -6,7 +6,10 @@ let ctx = null, analyser = null, data = null, stream = null;
 let mode = 'off'; // off | live | fake
 let raf = 0;
 let bands = new Float32Array(24);
-let level = 0, bass = 0, bassAvg = 0, lastBeat = 0, beatDir = 1;
+let level = 0, bass = 0, bassAvg = 0, lastBeat = 0, beatDir = 1, peakL = 0.1, peakB = 0.1;
+let prevBands = new Float32Array(24), fluxAvg = 0, lastTick = 0;
+const hits = { beat: 0, tick: 0 };
+window.__hits = hits; // dev aid: hit counters
 let stopTimer = null;
 
 async function startLive() {
@@ -59,12 +62,28 @@ function sample(t) {
   for (let i = 0; i < bands.length; i++) sum += bands[i];
   const l = sum / bands.length;
   const b = (bands[0] + bands[1] + bands[2] + bands[3]) / 4;
-  level = level * 0.6 + Math.min(1, l * 2.2) * 0.4;
-  bass = bass * 0.5 + Math.min(1, b * 1.4) * 0.5;
-  bassAvg = bassAvg * 0.97 + bass * 0.03;
-  if (bass > bassAvg * 1.3 && bass > 0.35 && t - lastBeat > 260) {
-    lastBeat = t; beatDir = -beatDir;
-    bus.emit('beat', bass);
+  // normalize to the track's own recent peaks so loud and quiet songs both
+  // "breathe": quiet parts dim, hits flare (instead of sitting at the maximum)
+  peakL = Math.max(l, peakL * 0.996, 0.04);
+  peakB = Math.max(b, peakB * 0.996, 0.04);
+  const nl = Math.pow(Math.min(1, l / peakL), 3);
+  const nb = Math.pow(Math.min(1, b / peakB), 2.2);
+  level = level * 0.6 + (nl * 0.35 + nb * 0.65) * 0.4; // glow follows the beat more than overall loudness
+  bass = bass * 0.5 + nb * 0.5;
+  bassAvg = bassAvg * 0.95 + bass * 0.05;
+  // spectral flux: how much the sound just "jumped" (snares, hats, vocals, synth stabs)
+  let flux = 0;
+  for (let i = 0; i < bands.length; i++) { flux += Math.max(0, bands[i] - prevBands[i]); prevBands[i] = bands[i]; }
+  fluxAvg = fluxAvg * 0.93 + flux * 0.07;
+  // big hits: kick drum / bass
+  const sens = { low: [1.25, 0.32], normal: [1.12, 0.22], high: [1.05, 0.14] }[state.settings?.theme?.beatSens || 'normal'] || [1.12, 0.22];
+  if (bass > bassAvg * sens[0] && bass > sens[1] && t - lastBeat > 170) {
+    lastBeat = t; lastTick = t; beatDir = -beatDir;
+    bus.emit('beat', bass); hits.beat++;
+  } else if (flux > fluxAvg * 1.55 && flux > 0.08 && t - lastTick > 120 && t - lastBeat > 90) {
+    // small hits in between: a lighter wiggle
+    lastTick = t;
+    bus.emit('tick', Math.min(1, flux / (fluxAvg * 3 + 0.01))); hits.tick++;
   }
 }
 
@@ -75,9 +94,10 @@ function loop(t) {
   else { level *= 0.9; bass *= 0.85; for (let i = 0; i < bands.length; i++) bands[i] *= 0.88; }
   const dance = state.settings?.theme?.edgeDance !== false;
   state.level = dance ? level : 0;
-  root.style.setProperty('--level', (dance ? level : 0).toFixed(3));
-  root.style.setProperty('--bass', bass.toFixed(3));
-  root.style.setProperty('--beatDir', beatDir);
+  // only the dancing eyes/buddies use these; setting them on :root would
+  // restyle the whole island every frame
+  const b = bass.toFixed(3);
+  for (const el of document.querySelectorAll('.eyes, .buddy')) { el.style.setProperty('--bass', b); el.style.setProperty('--beatDir', beatDir); }
   bus.emit('audio', { level, bass, bands });
   if (!playing && level < 0.005 && mode === 'off') { cancelAnimationFrame(raf); raf = 0; }
 }
@@ -94,3 +114,5 @@ export function audioActive(playing) {
   }
 }
 export const getBands = () => bands;
+// dev aid for --debug-shots
+window.__audio = () => ({ mode, level, bass, raf: !!raf, tracks: stream?.getAudioTracks().map((t) => t.readyState + ':' + t.label), ctx: ctx?.state, playing: state.media?.playing });
