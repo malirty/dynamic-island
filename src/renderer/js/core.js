@@ -223,6 +223,26 @@ export function weatherIcon(code, day = 1, size = 15) {
 }
 
 // effects around the character's eyes (shown by mood classes in CSS)
+// Island looks with their own animated layer (see .skin in island.css)
+export const SKINS = {
+  aurora: { mode: 'dark', base: '#06101a', colors: ['#34d399', '#22d3ee', '#a78bfa'], glow: '#34d399' },
+  neon: { mode: 'dark', base: '#07060d', colors: ['#ff2bd6', '#00e5ff', '#7c3aed'], glow: '#ff2bd6' },
+  holo: { mode: 'dark', base: '#0e0e18', colors: ['#a5f3fc', '#f0abfc', '#fde68a'], glow: '#c4b5fd' },
+  galaxy: { mode: 'dark', base: '#0a0618', colors: ['#8b5cf6', '#3b82f6', '#ec4899'], glow: '#8b5cf6' },
+  frost: { mode: 'light', base: 'rgba(236, 243, 255, .94)', colors: ['#93c5fd', '#c4b5fd', '#e0f2fe'], glow: '#93c5fd' },
+  sunset: { mode: 'dark', base: '#1a0a12', colors: ['#fb923c', '#f43f5e', '#a855f7'], glow: '#fb7185' },
+  ocean: { mode: 'dark', base: '#03111f', colors: ['#0ea5e9', '#06b6d4', '#2563eb'], glow: '#22d3ee' },
+  carbon: { mode: 'dark', base: '#0b0b0d', colors: ['#52525b', '#3f3f46', '#71717a'], glow: '#a1a1aa' },
+};
+export const SKIN_LIST = [['aurora', 'Аврора'], ['neon', 'Неон'], ['holo', 'Голограмма'], ['galaxy', 'Галактика'], ['frost', 'Иней'], ['sunset', 'Закат'], ['ocean', 'Океан'], ['carbon', 'Карбон']];
+// Progress bars glide while a track plays, but a seek (a big jump) lands at once.
+export function setProgress(track, p) {
+  if (!track) return;
+  const old = track._p;
+  track.classList.toggle('jump', old == null || Math.abs(p - old) > 0.02 || p < old);
+  track._p = p;
+  track.style.setProperty('--p', p);
+}
 export const CHARACTERS = [['eyes', 'Глаза'], ['cat', 'Котик'], ['bunny', 'Зайка'], ['robot', 'Робот'], ['ghost', 'Призрак'], ['alien', 'Пришелец'], ['angel', 'Ангел'], ['frog', 'Лягушка'], ['devil', 'Чертёнок'], ['buddies', 'Человечки'], ['none', 'Никого']];
 export const EYE_FX = `<div class="deco"><i></i><i></i><i></i><i></i></div><div class="fx"><i class="fx-load"></i><i class="fx-rings"><b></b><b></b></i><i class="fx-bubbles"><b></b><b></b><b></b></i><i class="fx-q">?</i><i class="fx-sweat"></i><i class="fx-dots3"><b></b><b></b><b></b></i><i class="fx-orbit"><b></b><b></b><b></b></i><i class="fx-dots"><b></b><b></b><b></b></i><i class="fx-bulb"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/></svg></i><i class="fx-bang">!</i><i class="fx-notes"><b>♪</b><b>♫</b><b>♪</b></i><i class="fx-joy"><b>✦</b><b>✦</b><b>✦</b><b>✦</b></i><i class="fx-vein"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M3 9.5c3.5 0 6.5-3 6.5-6.5M14.5 3c0 3.5 3 6.5 6.5 6.5M21 14.5c-3.5 0-6.5 3-6.5 6.5M9.5 21c0-3.5-3-6.5-6.5-6.5"/></svg></i></div>`;
 

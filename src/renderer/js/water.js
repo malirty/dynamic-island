@@ -435,6 +435,9 @@ function loop(now) {
   for (const v of views) {
     const name = v.className.match(/\bv-(\w+)/)?.[1];
     if (name !== cur && !(name === prevView && now < prevUntil)) continue;
+    // the pill, mini island and toasts keep their content inside anyway; leaving them
+    // unclipped lets the halo, ears and antennae stick out over the edge
+    if (name === 'compact' || name === 'mini' || name === 'toast') { if (v.style.clipPath) v.style.clipPath = ''; continue; }
     const c = name === 'open' ? oclip : vclip;
     if (v.style.clipPath !== c) v.style.clipPath = c;
   }

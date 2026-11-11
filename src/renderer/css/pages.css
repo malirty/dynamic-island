@@ -559,3 +559,8 @@ select.field option { background: #1a1a22; color: #eee; }
 
 /* invisible one-time paint of the open panel after start */
 #island.prewarm .v-open { opacity: .002 !important; transition: none !important; }
+
+/* emotions list in the settings */
+.emo-row .emo-prev { flex: none; width: 74px; }
+.emo-row .emo-prev .mp { margin: 0; }
+.emo-row .sl2 small { white-space: normal; }

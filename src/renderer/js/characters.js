@@ -25,8 +25,7 @@ function mood() {
   const night = (() => { const hh = new Date().getHours(); return hh >= 1 && hh < 6; })();
   if (away && (state.idle > sleepMin * 30 || (night && state.idle > 60))) return 'mood-sleepy';
   if (away && state.idle > 50) return 'mood-bored';
-  if (flags.aiThinking) return 'mood-think';
-  if (flags.agentWorking) return 'mood-ponder'; // an AI agent is working: deep in thought
+  if (flags.aiThinking || flags.agentWorking) return 'mood-ponder'; // an AI is working: deep in thought
   if (busy) return 'mood-busy';
   if (music) return 'mood-dance';
   return '';

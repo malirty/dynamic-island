@@ -838,8 +838,8 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; line-height: 1.
 .eyes:not(.fxl) { transition: transform .45s var(--spring), filter .6s ease, top .35s var(--spring); }
 
 /* ================= joy, new: a little victory dance + confetti ================= */
-:is(.mood-joy .eyes, .eyes.e-joy) { --eye: #8dffbe; --eyeGlow: rgba(70, 235, 150, .75); animation: joyDance 1.25s cubic-bezier(.3, .6, .4, 1) 2; }
-:is(.mood-joy .eyes, .eyes.e-joy) .eye { animation: joyBlink 1.25s ease-in-out 2; }
+:is(.mood-joy .eyes, .eyes.e-joy) { --eye: #8dffbe; --eyeGlow: rgba(70, 235, 150, .75); animation: joyDance 1.25s cubic-bezier(.3, .6, .4, 1) 1; }
+:is(.mood-joy .eyes, .eyes.e-joy) .eye { animation: joyBlink 1.25s ease-in-out 1; }
 @keyframes joyDance {
   0% { transform: scale(1.15, .8); }
   14% { transform: translate(-3px, -6px) rotate(-14deg) scale(.95, 1.1); }
@@ -897,3 +897,70 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; line-height: 1.
 .fx-bubbles b:nth-child(2) { --bx: 2px; animation-delay: .6s !important; width: 3px; height: 3px; }
 .fx-bubbles b:nth-child(3) { --bx: 18px; animation-delay: 1.2s !important; }
 @keyframes joyBubble { 0% { transform: translate(calc(var(--bx) * .4), 10px) scale(.4); opacity: 0; } 25% { opacity: .95; } 100% { transform: translate(var(--bx), -12px) scale(1); opacity: 0; } }
+
+/* ---------- progress bar: glides while playing, jumps on a seek ---------- */
+.track.jump > i { transition: width .16s ease-out; }
+
+/* ---------- the halo floats higher, over the island's edge ---------- */
+.char-angel .deco i:nth-child(1) { top: -14px; }
+
+/* ================= island looks (skins) ================= */
+.ib .skin { position: absolute; inset: 0; pointer-events: none; overflow: hidden; display: none; --sk: 20px; }
+.mp .ib .skin { --sk: 0px; }
+:root[data-plain] #island .ib, .mp[data-skin] .ib { background: var(--base); }
+:is(:root[data-plain="aurora"], :root[data-plain="neon"], :root[data-plain="holo"], :root[data-plain="galaxy"], :root[data-plain="frost"], :root[data-plain="sunset"], :root[data-plain="ocean"], :root[data-plain="carbon"]) #island .skin, .mp[data-skin] .skin { display: block; }
+.skin::before, .skin::after { content: ''; position: absolute; pointer-events: none; }
+
+/* aurora: slow northern lights */
+:is(:root[data-plain="aurora"] #island, .mp[data-skin="aurora"]) .skin::before { inset: -40%; background: radial-gradient(40% 60% at 30% 45%, rgba(52, 211, 153, .55), transparent 70%), radial-gradient(35% 55% at 70% 55%, rgba(34, 211, 238, .45), transparent 70%), radial-gradient(30% 50% at 50% 30%, rgba(167, 139, 250, .5), transparent 70%); filter: blur(14px); animation: auroraMove 14s ease-in-out infinite alternate; }
+:is(:root[data-plain="aurora"] #island, .mp[data-skin="aurora"]) .skin::after { inset: 0; background: linear-gradient(180deg, rgba(255,255,255,.06), transparent 40%); }
+@keyframes auroraMove { from { transform: translate(-14%, 5%) rotate(-8deg) scale(1); } to { transform: translate(14%, -5%) rotate(8deg) scale(1.1); } }
+
+/* neon: a glowing tube along the edge that slowly changes colour */
+:is(:root[data-plain="neon"] #island, .mp[data-skin="neon"]) .skin::before { inset: var(--sk); border-radius: var(--r, 19px); box-shadow: inset 0 0 0 1.6px #ff2bd6, inset 0 0 12px -2px #ff2bd6, inset 0 0 28px -10px #00e5ff, 0 0 14px -4px #ff2bd6; animation: neonHue 8s linear infinite; }
+.mp[data-skin="neon"] .skin::before { border-radius: inherit; }
+@keyframes neonHue { to { filter: hue-rotate(360deg); } }
+
+/* holo: an iridescent sheen sliding across */
+:is(:root[data-plain="holo"] #island, .mp[data-skin="holo"]) .skin::before { inset: -10% -60%; background: linear-gradient(115deg, transparent 22%, rgba(255, 0, 200, .28) 36%, rgba(0, 255, 255, .26) 48%, rgba(255, 255, 0, .22) 60%, transparent 76%); mix-blend-mode: screen; animation: holoSlide 6s ease-in-out infinite alternate; }
+:is(:root[data-plain="holo"] #island, .mp[data-skin="holo"]) .skin::after { inset: 0; background: radial-gradient(120% 140% at 50% -20%, rgba(255,255,255,.12), transparent 60%); }
+@keyframes holoSlide { from { transform: translateX(-22%); } to { transform: translateX(22%); } }
+
+/* galaxy: nebula + twinkling stars */
+:is(:root[data-plain="galaxy"] #island, .mp[data-skin="galaxy"]) .skin { background: radial-gradient(60% 90% at 72% 40%, rgba(139, 92, 246, .38), transparent 70%), radial-gradient(50% 80% at 22% 70%, rgba(236, 72, 153, .26), transparent 70%); }
+:is(:root[data-plain="galaxy"] #island, .mp[data-skin="galaxy"]) .skin::before, :is(:root[data-plain="galaxy"] #island, .mp[data-skin="galaxy"]) .skin::after { inset: 0; background-image: radial-gradient(1.2px 1.2px at 20px 15px, #fff 50%, transparent 52%), radial-gradient(1px 1px at 64px 38px, rgba(255,255,255,.85) 50%, transparent 52%), radial-gradient(1.4px 1.4px at 112px 22px, #c4b5fd 50%, transparent 52%), radial-gradient(1px 1px at 152px 52px, #fff 50%, transparent 52%), radial-gradient(1.1px 1.1px at 90px 8px, #93c5fd 50%, transparent 52%); background-size: 180px 64px; animation: twinkle 3.2s ease-in-out infinite alternate; }
+:is(:root[data-plain="galaxy"] #island, .mp[data-skin="galaxy"]) .skin::after { background-size: 230px 86px; background-position: 40px 20px; animation-delay: -1.6s; }
+@keyframes twinkle { from { opacity: .25; } to { opacity: 1; } }
+
+/* frost: frosted ice with grain */
+:is(:root[data-plain="frost"] #island, .mp[data-skin="frost"]) .skin { background: linear-gradient(160deg, rgba(255,255,255,.6), rgba(210, 226, 255, .3)); }
+:is(:root[data-plain="frost"] #island, .mp[data-skin="frost"]) .skin::before { inset: 0; opacity: .22; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E"); mix-blend-mode: overlay; }
+:is(:root[data-plain="frost"] #island, .mp[data-skin="frost"]) .skin::after { inset: 0; background: radial-gradient(80% 120% at 20% 0%, rgba(255,255,255,.7), transparent 55%); }
+
+/* sunset: warm colours slowly turning */
+:is(:root[data-plain="sunset"] #island, .mp[data-skin="sunset"]) .skin::before { inset: -150%; background: conic-gradient(from 0deg, #fb923c, #f43f5e, #a855f7, #f97316, #fb923c); filter: blur(28px); opacity: .7; animation: spinSlow 26s linear infinite; }
+:is(:root[data-plain="sunset"] #island, .mp[data-skin="sunset"]) .skin::after { inset: 0; background: linear-gradient(180deg, transparent 30%, rgba(10, 0, 8, .45)); }
+@keyframes spinSlow { to { transform: rotate(360deg); } }
+
+/* ocean: moving light under water */
+:is(:root[data-plain="ocean"] #island, .mp[data-skin="ocean"]) .skin::before, :is(:root[data-plain="ocean"] #island, .mp[data-skin="ocean"]) .skin::after { inset: -30%; filter: blur(10px); }
+:is(:root[data-plain="ocean"] #island, .mp[data-skin="ocean"]) .skin::before { background: radial-gradient(30% 45% at 30% 60%, rgba(34, 211, 238, .4), transparent 70%), radial-gradient(22% 35% at 72% 35%, rgba(14, 165, 233, .38), transparent 70%); animation: oceanA 9s ease-in-out infinite alternate; }
+:is(:root[data-plain="ocean"] #island, .mp[data-skin="ocean"]) .skin::after { background: radial-gradient(18% 30% at 55% 70%, rgba(125, 211, 252, .3), transparent 70%), radial-gradient(25% 40% at 15% 30%, rgba(37, 99, 235, .35), transparent 70%); animation: oceanB 12s ease-in-out infinite alternate; }
+@keyframes oceanA { to { transform: translate(12%, -8%) scale(1.15); } }
+@keyframes oceanB { to { transform: translate(-14%, 6%) scale(.9); } }
+
+/* carbon: woven fibre and a hard top sheen */
+:is(:root[data-plain="carbon"] #island, .mp[data-skin="carbon"]) .skin { background: repeating-linear-gradient(45deg, rgba(255,255,255,.035) 0 2px, transparent 2px 4px), repeating-linear-gradient(-45deg, rgba(0,0,0,.4) 0 2px, transparent 2px 4px); }
+:is(:root[data-plain="carbon"] #island, .mp[data-skin="carbon"]) .skin::after { inset: 0; background: linear-gradient(180deg, rgba(255,255,255,.1), transparent 45%); }
+
+/* ================= "По умолчанию": a live background for the time of day ================= */
+:root[data-tod]:not([data-tod=""]) #island .skin { display: block; transition: opacity 2s; }
+/* morning: a soft sunrise glow from the left */
+:root[data-tod="morning"] #island .skin::before { inset: -60%; background: radial-gradient(35% 45% at 25% 60%, rgba(253, 186, 116, .45), transparent 70%), radial-gradient(30% 40% at 60% 40%, rgba(251, 113, 133, .3), transparent 70%); filter: blur(16px); animation: auroraMove 18s ease-in-out infinite alternate; }
+/* day: light moving under water */
+:root[data-tod="day"] #island .skin::before { inset: -30%; filter: blur(10px); opacity: .7; background: radial-gradient(30% 45% at 30% 60%, rgba(34, 211, 238, .35), transparent 70%), radial-gradient(22% 35% at 72% 35%, rgba(14, 165, 233, .32), transparent 70%); animation: oceanA 10s ease-in-out infinite alternate; }
+/* evening: warm sunset colours slowly turning */
+:root[data-tod="evening"] #island .skin::before { inset: -150%; background: conic-gradient(from 0deg, #fb923c, #f43f5e, #a855f7, #f97316, #fb923c); filter: blur(28px); opacity: .42; animation: spinSlow 30s linear infinite; }
+/* night: twinkling stars */
+:root[data-tod="night"] #island .skin::before, :root[data-tod="night"] #island .skin::after { inset: 0; background-image: radial-gradient(1.2px 1.2px at 20px 15px, #fff 50%, transparent 52%), radial-gradient(1px 1px at 64px 38px, rgba(255,255,255,.85) 50%, transparent 52%), radial-gradient(1.4px 1.4px at 112px 22px, #c4b5fd 50%, transparent 52%), radial-gradient(1px 1px at 152px 52px, #fff 50%, transparent 52%), radial-gradient(1.1px 1.1px at 90px 8px, #93c5fd 50%, transparent 52%); background-size: 180px 64px; animation: twinkle 3.2s ease-in-out infinite alternate; opacity: .8; }
+:root[data-tod="night"] #island .skin::after { background-size: 230px 86px; background-position: 40px 20px; animation-delay: -1.6s; }

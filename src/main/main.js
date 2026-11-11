@@ -316,7 +316,13 @@ function startPolling() {
 
 // ---------------- IPC ----------------
 function ipc() {
-  const h = (ch, fn) => ipcMain.handle(ch, (e, ...a) => fn(...a, e));
+  // Handlers get exactly the arguments the window sent. (Appending the IPC event after them
+  // filled optional parameters with it - e.g. a shelf note - and broke cloning/saving.)
+  const h = (ch, fn) => ipcMain.handle(ch, (e, ...a) => fn(...a));
+  // the few handlers that need to know which window asked: the event comes last, after padding
+  const he = (ch, fn) => ipcMain.handle(ch, (e, ...a) => { while (a.length < fn.length - 1) a.push(undefined); return fn(...a.slice(0, fn.length - 1), e); });
+  // shelf entries saved by the old bug carry that event object as their note: clean them
+  for (const it of S.shelf.data.items) if (typeof it.note !== 'string') it.note = '';
 
   h('init', () => ({
     settings: S.settings.data, clips: S.clips.data.items, notes: S.notes.data.items, shelf: S.shelf.data.items,
@@ -327,7 +333,7 @@ function ipc() {
   }));
 
   h('weather:refresh', () => services.weather.refresh());
-  h('settings:set', (data, e) => {
+  he('settings:set', (data, e) => {
     const cityChanged = data.weather?.city !== S.settings.data.weather?.city;
     S.settings.data = data; S.settings.save();
     if (cityChanged) { clearTimeout(ipc.weatherT); ipc.weatherT = setTimeout(() => services.weather.refresh(), 1500); }
@@ -338,7 +344,7 @@ function ipc() {
     for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed() && w.webContents !== e.sender) w.webContents.send('settings', data);
     return hotkeys;
   });
-  h('settings:reset', (e) => {
+  he('settings:reset', (e) => {
     S.settings.data = JSON.parse(JSON.stringify(storeMod.DEFAULT_SETTINGS)); S.settings.save();
     for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed() && w.webContents !== e.sender) w.webContents.send('settings', S.settings.data);
     applySettings(); registerHotkeys();
@@ -354,6 +360,7 @@ function ipc() {
     if (w === island) hitRects = hit || rects;
   });
   h('island:focus', () => island.focus());
+  h('island:mood', (m) => send('mood-flash', { mood: m, ms: 3500 }));
   h('island:release', async () => { if (lastExternal) await helper.fast('focus', { hwnd: lastExternal.hwnd }).catch(() => {}); });
   h('island:source', () => lastExternal);
 
@@ -401,14 +408,15 @@ function ipc() {
 
   // shelf
   h('shelf:add', async (paths, note) => {
-    for (const p of paths) {
+    if (typeof note !== 'string') note = '';
+    for (const p of paths || []) {
       if (!fs.existsSync(p) || S.shelf.data.items.some((x) => x.path === p)) continue;
       let icon = null;
       try { icon = (await app.getFileIcon(p, { size: 'normal' })).toDataURL(); } catch {}
       const st = fs.statSync(p);
       S.shelf.data.items.unshift({ id: crypto.randomUUID(), path: p, name: path.basename(p), size: st.size, dir: st.isDirectory(), icon, note: note || '', ts: Date.now() });
     }
-    S.shelf.save(); send('shelf', S.shelf.data.items);
+    S.shelf.save(); S.shelf.flush(); send('shelf', S.shelf.data.items);
     return S.shelf.data.items;
   });
   h('shelf:remove', (id) => { S.shelf.data.items = S.shelf.data.items.filter((x) => x.id !== id); S.shelf.save(); send('shelf', S.shelf.data.items); });
@@ -426,7 +434,7 @@ function ipc() {
   h('url:open', (u) => shell.openExternal(u));
 
   // AI
-  h('ai:chat', (reqId, req, e) => { services.ai.chat(reqId, req, (ch, p) => { if (!e.sender.isDestroyed()) e.sender.send(ch, p); }); return true; });
+  he('ai:chat', (reqId, req, e) => { services.ai.chat(reqId, req, (ch, p) => { if (!e.sender.isDestroyed()) e.sender.send(ch, p); }); return true; });
   h('ai:abort', (reqId) => services.ai.abort(reqId));
   h('ai:ask', (prompt, files) => services.ai.ask(prompt, files));
   h('ai:transcribe', (b64, mime) => services.ai.transcribe(b64, mime));
@@ -556,8 +564,8 @@ function ipc() {
   h('island:hide', (minutes) => hideIsland(+minutes || 0));
   h('app:quit', () => app.quit());
   h('app:relaunch', () => { app.relaunch(); app.quit(); });
-  h('win:close', (e) => BrowserWindow.fromWebContents(e.sender)?.close());
-  h('win:minimize', (e) => BrowserWindow.fromWebContents(e.sender)?.minimize());
+  he('win:close', (e) => BrowserWindow.fromWebContents(e.sender)?.close());
+  he('win:minimize', (e) => BrowserWindow.fromWebContents(e.sender)?.minimize());
 }
 
 // Dev aid: saves the island window as PNG and runs commands from debug-cmd.json

@@ -1,4 +1,4 @@
-import { api, bus, state, $, h, esc, icon, debounce, saveSettings, EYE_FX } from '../core.js';
+import { api, bus, state, $, h, esc, icon, debounce, saveSettings, EYE_FX, SKINS, SKIN_LIST } from '../core.js';
 import { QUICK } from './home.js';
 import { SOUND_EVENTS, SOUNDS, play as playSound } from '../sounds.js';
 import { TILES, CC_DEFAULTS, TOGGLE_IDS, POWER } from './control.js';
@@ -43,6 +43,7 @@ const DESC_BY_TITLE = {
 
 const isDark = (m) => m !== 'light';
 function baseFor(style, mode, solid) {
+  if (SKINS[style]) return SKINS[style].base;
   if (style === 'white') return '#ffffff';
   if (style === 'black') return '#000000';
   if (style === 'glass') return isDark(mode) ? 'rgba(22,22,32,.66)' : 'rgba(255,255,255,.6)';
@@ -54,20 +55,21 @@ const eyesMini = (cls = '') => `<div class="eyes ${cls}"><div class="eye"></div>
 function pill(o = {}) {
   const t = S().theme;
   const style = o.style || t.style;
-  const plainP = { white: ['light', ['#d9d9e1', '#c7c7d1', '#ececf1'], '#9d9daa'], black: ['dark', ['#2c2c33', '#1d1d22', '#3a3a42'], '#6e6e7a'] }[style];
+  const sk = SKINS[style];
+  const plainP = sk ? [sk.mode, sk.colors, sk.glow] : { white: ['light', ['#d9d9e1', '#c7c7d1', '#ececf1'], '#9d9daa'], black: ['dark', ['#2c2c33', '#1d1d22', '#3a3a42'], '#6e6e7a'] }[style];
   const mode = plainP ? plainP[0] : o.mode || t.mode, colors = plainP ? plainP[1] : o.colors || t.colors;
   if (plainP) o = { ...o, glowColor: plainP[2] };
-  const op = { mood: [0.62, 0, 0], liquid: [0.55, 0, 0], gradient: [0.2, 1, 0], glass: [0.35, 0, 1], solid: [0, 0, 0], white: [0, 0, 0], black: [0, 0, 0] }[style] || [0.5, 0, 0];
+  const op = sk ? [0, 0, 0] : { mood: [0.62, 0, 0], liquid: [0.55, 0, 0], gradient: [0.2, 1, 0], glass: [0.35, 0, 1], solid: [0, 0, 0], white: [0, 0, 0], black: [0, 0, 0] }[style] || [0.5, 0, 0];
   const glow = o.glow ?? t.glow;
   const vars = `--c1:${colors[0]};--c2:${colors[1]};--c3:${colors[2]};--glow:${o.glowColor || colors[0]};--glowK:${glow};--liquidOp:${op[0]};--flowOp:${op[1]};--glassOp:${op[2]};--base:${baseFor(style, mode, t.solid)};${o.vars || ''}`;
-  return `<div class="mp ${o.cls || ''}" data-mode="${mode}" style="${vars}"><div class="ib"><div class="flow"></div><div class="liquid"><i></i><i></i><i></i></div><div class="glassrim"></div>${o.sheen ? '<div class="mpsheen"></div>' : ''}</div><div class="mpc">${o.content ?? `<span class="d">ср, 11</span>${eyesMini()}<span>10:42</span>`}</div>${o.after || ''}</div>`;
+  return `<div class="mp ${o.cls || ''}" data-mode="${mode}"${sk ? ` data-skin="${style}"` : ''} style="${vars}"><div class="ib"><div class="flow"></div><div class="liquid"><i></i><i></i><i></i></div><div class="skin"></div><div class="glassrim"></div>${o.sheen ? '<div class="mpsheen"></div>' : ''}</div><div class="mpc">${o.content ?? `<span class="d">ср, 11</span>${eyesMini()}<span>10:42</span>`}</div>${o.after || ''}</div>`;
 }
 const cap = (text, on) => `<div class="mpl${on ? ' on' : ''}">${esc(text)}</div>`;
 const chipsGrid = (items) => `<div class="mpgrid">${items.map(([ic, label]) => `<div class="mpi">${icon(ic, 14)}<span>${esc(label)}</span></div>`).join('') || '<div class="muted small">Пусто</div>'}</div>`;
 
 const PREVIEW = {
   theme: () => `<div class="mprow">${['dark', 'light'].map((m) => `<div class="mpcol">${pill({ mode: m, cls: 'sm', content: eyesMini() })}${cap(m === 'dark' ? 'Тёмная' : 'Светлая', S().theme.mode === m)}</div>`).join('')}</div>`,
-  material: () => `<div class="mprow wrap">${[['mood', 'По умолч.'], ['liquid', 'Жидкий'], ['glass', 'Стекло'], ['gradient', 'Градиент'], ['solid', 'Сплошной']].map(([st, l]) => `<div class="mpcol">${pill({ style: st, content: eyesMini() , cls: 'sm' })}${cap(l, S().theme.style === st)}</div>`).join('')}</div>`,
+  material: () => `<div class="mprow wrap">${[['mood', 'По умолч.'], ['liquid', 'Жидкий'], ['glass', 'Стекло'], ['gradient', 'Градиент'], ['solid', 'Сплошной'], ...SKIN_LIST].map(([st, l]) => `<div class="mpcol">${pill({ style: st, content: eyesMini() , cls: 'sm' })}${cap(l, S().theme.style === st)}</div>`).join('')}</div>`,
   colors: () => `${pill({ cls: 'big' })}<div class="mprow" style="margin-top:8px">${S().theme.colors.map((c) => `<i class="dot" style="background:${c}"></i>`).join('')}</div>`,
   glow: () => `${pill({ cls: 'glowing big' })}<div class="mpl">Сила ${Math.round(S().theme.glow * 100)}%</div>`,
   cover: () => S().theme.coverGlow
@@ -85,8 +87,7 @@ const PREVIEW = {
     const content = ch === 'none' ? '<span class="d">ср, 11</span><span>10:42</span>' : undefined;
     const after = ch === 'buddies' ? `<div class="mpbud"><i>${eyesMini('b')}</i><i>${eyesMini('b')}</i></div>` : '';
     // every emotion the eyes can show, live (they animate here too)
-    const emo = [['', 'спокоен'], ['e-sleepy', 'сонный'], ['e-sleep', 'спит'], ['e-angry', 'злится'], ['e-shy', 'смущается'], ['e-busy', 'занят'], ['e-think', 'думает'], ['e-idea', 'придумал'], ['e-ponder', 'размышляет'], ['e-sad', 'грустит'], ['e-love', 'влюблён'], ['e-laugh', 'смеётся'], ['e-confused', 'не понял'], ['e-excited', 'в восторге'], ['e-bored', 'скучает'], ['e-scared', 'испугался'], ['e-joy', 'радуется'], ['e-dance', 'танцует'], ['e-startle', 'удивлён']];
-    const grid = ch === 'none' ? '' : `<div class="mpemo">${emo.map(([c, l]) => `<div class="mpcol">${pill({ cls: 'emo', content: eyesMini(c) })}<div class="mpl">${l}</div></div>`).join('')}</div>`;
+    const grid = '';
     return pill({ content, after, cls: 'big' }) + cap({ eyes: 'Глаза', buddies: 'Человечки', none: 'Никого' }[ch], true) + grid;
   },
   seconds: () => pill({ content: `<span class="d">ср, 11</span>${eyesMini()}<span>${S().island.showSeconds ? '10:42:17' : '10:42'}</span>`, cls: 'big' }),
@@ -222,7 +223,7 @@ function render() {
   const presets = h('div', { class: 'presets' }, ...PRESETS.map((p) => h('div', { class: 'preset', style: { background: `linear-gradient(90deg, ${p.join(',')})` }, onclick: () => { s.theme.colors = [...p]; commit(); render(); showHint('Палитры', 'Нажми — и остров перекрасится целиком.', 'colors', true); } })));
   add('look', ...group('Внешний вид',
     row('Тема', 'светлая или тёмная', seg([['dark', 'Тёмная'], ['light', 'Светлая']], () => s.theme.mode, (v) => (s.theme.mode = v)), 'Тема', `Цвет самого острова. Переключается одной клавишей: ${s.hotkeys.themeToggle}.`),
-    rowWide('Материал', null, seg([['mood', 'По умолчанию'], ['liquid', 'Жидкий'], ['glass', 'Стекло'], ['gradient', 'Градиент'], ['solid', 'Сплошной']], () => s.theme.style, (v) => { if (['white', 'black'].includes(s.theme.style)) s.theme.mode = s.theme.style === 'white' ? 'light' : 'dark'; s.theme.style = v; }), 'Материал острова', 'По умолчанию — остров сам меняет цвет по настроению: красный, когда злится или случилась ошибка, фиолетовый, когда сонный, голубой, когда занят, синий, когда думает, тёплый, когда радуется, и цвет обложки под музыку. Жидкий — цветные переливы под тёмной поверхностью. Стекло — полупрозрачный с бликами. Градиент — бегущий цветной градиент. Сплошной — классическая чёрная пилюля.'),
+    rowWide('Материал', null, seg([['mood', 'По умолчанию'], ['liquid', 'Жидкий'], ['glass', 'Стекло'], ['gradient', 'Градиент'], ['solid', 'Сплошной'], ...SKIN_LIST], () => s.theme.style, (v) => { if (['white', 'black'].includes(s.theme.style)) s.theme.mode = s.theme.style === 'white' ? 'light' : 'dark'; s.theme.style = v; }), 'Материал острова', 'Аврора, Неон, Голограмма, Галактика, Иней, Закат, Океан и Карбон — живые оформления со своей анимацией и цветами. По умолчанию — остров живёт по времени суток (утром рассвет, днём море, вечером закат, ночью звёзды — по восходу и закату твоего города) и меняет цвет по настроению: красный, когда злится или случилась ошибка, фиолетовый, когда сонный, голубой, когда занят, синий, когда думает, тёплый, когда радуется, и цвет обложки под музыку. Жидкий — цветные переливы под тёмной поверхностью. Стекло — полупрозрачный с бликами. Градиент — бегущий цветной градиент. Сплошной — классическая чёрная пилюля.'),
     row('Цвета', 'три цвета переливов и ободка', colors, 'Цвета', 'Из этих цветов собираются жидкие переливы, градиент и светящийся ободок острова.'),
     rowWide('Готовые палитры', null, presets, 'Палитры', 'Нажми — и остров перекрасится целиком.'),
     row('Край в цвет обложки', null, toggle(() => s.theme.coverGlow, (v) => (s.theme.coverGlow = v)), 'Цвет обложки', 'Когда играет музыка, край острова светится главным цветом обложки трека.'),
@@ -246,6 +247,32 @@ function render() {
     row('Свет за курсором', null, toggle(() => s.theme.cursorGlow, (v) => (s.theme.cursorGlow = v)), 'Свет за курсором', 'Мягкий блик по поверхности острова следует за мышью, а ободок разгорается, когда курсор рядом.'),
     row('Яркость света у курсора', null, range(0, 1.5, 0.05, () => s.theme.cursorGlowK ?? 1, (v) => (s.theme.cursorGlowK = v)), 'Свет у курсора', 'Насколько ярко ободок и волны вспыхивают рядом с мышью.'),
     row('Свечение под музыку', 'низ острова и круги', range(0, 1.5, 0.05, () => s.theme.musicGlowK ?? 1, (v) => (s.theme.musicGlowK = v)), 'Свечение под музыку', 'Яркость цветного свечения снизу острова, пока играет трек.')));
+
+  const EMOTIONS = [
+    ['', 'Спокоен', 'Обычное состояние, когда ничего не происходит. Следит за курсором, моргает, иногда сам делает трюки.'],
+    ['joy', 'Радуется', 'Агент (Claude / Codex) закончил задачу; включилась музыка.'],
+    ['love', 'Влюблён', 'Погладь его: спокойно поводи мышью влево-вправо прямо над глазами 3 раза.'],
+    ['shy', 'Смущается', 'Ткни в остров два раза подряд (через раз).'],
+    ['laugh', 'Смеётся', 'Пощекочи: очень быстро поводи мышью по острову.'],
+    ['excited', 'В восторге', 'Закончилась загрузка файла.'],
+    ['idea', 'Придумал', 'Распознан текст со скриншота или перевод готов; ИИ дал ответ (в режиме API-ключей).'],
+    ['ponder', 'Размышляет', 'Работает агент Claude / Codex или ИИ готовит ответ.'],
+    ['busy', 'Занят', 'Идёт загрузка файла.'],
+    ['dance', 'Танцует', 'Играет музыка — качается и кивает в такт.'],
+    ['confused', 'Не понял', 'Остров не понял команду, например время в напоминании.'],
+    ['startle', 'Удивлён', 'Пришло уведомление; ты тянешь файл на остров.'],
+    ['scared', 'Испугался', 'Ткни в остров три раза подряд.'],
+    ['sad', 'Грустит', 'Музыку поставили на паузу.'],
+    ['angry', 'Злится', 'Ошибка; или ткни в остров 4 раза подряд.'],
+    ['bored', 'Скучает', 'Тебя нет около минуты.'],
+    ['sleepy', 'Сонный', 'Тебя нет пару минут (ночью — раньше).'],
+    ['sleep', 'Спит', 'Тебя нет дольше, чем указано в «Засыпать через». Пошевели мышью — проснётся и потянется.'],
+  ];
+  add('island', ...group('Эмоции — как вызвать',
+    ...EMOTIONS.map(([id, name, how]) => h('div', { class: 'srow emo-row', ...hint(name, how) },
+      h('div', { class: 'emo-prev', html: pill({ cls: 'emo', content: eyesMini(id ? 'e-' + id : '') }) }),
+      h('div', { class: 'sl2' }, name, h('small', {}, how)),
+      id ? h('button', { class: 'btn sm', onclick: () => api.invoke('island:mood', 'mood-' + id) }, 'Показать') : ''))));
 
   add('island', ...group('Персонаж',
     row('Трюки сами по себе', 'крутится, прыгает, подмигивает', seg([['off', 'Выкл'], ['rare', 'Редко'], ['normal', 'Обычно'], ['often', 'Часто']], () => s.island.trickRate || 'normal', (v) => (s.island.trickRate = v)), 'Трюки', 'Как часто персонаж сам что-то вытворяет, когда ничего не происходит: крутится, прыгает, подмигивает, хихикает, выглядывает, пускает сердечки.'),

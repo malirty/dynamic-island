@@ -1,4 +1,4 @@
-import { api, bus, state, $, $$, h, esc, icon, mediaIcon, clock, bytes, coverColor, saveSettings, glyphTile, weatherIcon, EYE_FX } from './core.js';
+import { api, bus, state, $, $$, h, esc, icon, mediaIcon, clock, bytes, coverColor, saveSettings, glyphTile, weatherIcon, EYE_FX, setProgress, SKINS } from './core.js';
 import { audioActive } from './audio.js';
 import { play as playSound } from './sounds.js';
 import { initWater } from './water.js';
@@ -377,13 +377,13 @@ function renderMini() {
     $('.js-seek', el).onclick = (e) => {
       e.stopPropagation();
       const r = e.currentTarget.getBoundingClientRect();
-      if (m.canSeek && m.duration) api.invoke('media:cmd', 'seek', { position: ((e.clientX - r.left) / r.width) * m.duration });
+      if (m.canSeek && m.duration) { const k = (e.clientX - r.left) / r.width; setProgress(e.currentTarget, k); api.invoke('media:cmd', 'seek', { position: k * m.duration }); }
     };
   }
   $('.js-pp', el).innerHTML = mediaIcon(m.playing ? 'pause' : 'play', 19);
   $('.js-pos', el).textContent = clock(m.position || 0);
   $('.js-dur', el).textContent = clock(m.duration || 0);
-  $('.track', el).style.setProperty('--p', m.duration ? m.position / m.duration : 0);
+  setProgress($('.track', el), m.duration ? m.position / m.duration : 0);
 }
 
 // Mini island without music: big clock, weather and a few quick actions.
@@ -621,22 +621,47 @@ const MOOD_PALETTES = {
   scared: [['#e0e7ff', '#a5b4fc', '#c7d2fe'], '#c7d2fe'],
   startle: [['#ffffff', '#c9e4ff', '#ffd6f5'], '#ffffff'],
 };
+// "По умолчанию" when nothing special is going on: the island follows the time of day
+const TOD_PALETTES = {
+  morning: [['#fdba74', '#fb7185', '#fde68a'], '#fb923c'], // sunrise
+  day: [['#0ea5e9', '#22d3ee', '#6366f1'], '#22d3ee'],     // clear sky / sea
+  evening: [['#fb923c', '#f43f5e', '#a855f7'], '#fb7185'], // sunset
+  night: [['#8b5cf6', '#3b82f6', '#ec4899'], '#8b5cf6'],   // starry night
+};
+function timeOfDay(d = new Date()) {
+  if (window.__tod) return window.__tod; // dev aid: force a time of day
+  // with weather data, follow the real sunrise / sunset for your city
+  const day = state.weather?.daily;
+  const hm = d.getHours() + d.getMinutes() / 60;
+  let rise = 6.5, set = 18;
+  if (day?.sunrise?.[0] && day?.sunset?.[0]) {
+    const r = new Date(day.sunrise[0]), s = new Date(day.sunset[0]);
+    rise = r.getHours() + r.getMinutes() / 60; set = s.getHours() + s.getMinutes() / 60;
+  }
+  if (hm >= rise - 0.5 && hm < rise + 3) return 'morning';
+  if (hm >= rise + 3 && hm < set - 1) return 'day';
+  if (hm >= set - 1 && hm < set + 1.5) return 'evening';
+  return 'night';
+}
 function moodColors() {
   const m = (currentMood() || '').replace('mood-', '');
   if (m === 'dance') { const cov = coverGlowColor || '#ff4fd8'; return [[cov, '#7c5cff', '#00d4ff'], cov]; }
-  return MOOD_PALETTES[m] || MOOD_PALETTES[''];
+  if (!m) return TOD_PALETTES[timeOfDay()];
+  return MOOD_PALETTES[m] || TOD_PALETTES[timeOfDay()];
 }
 
 const PLAIN = {
   white: { mode: 'light', base: '#ffffff', colors: ['#d9d9e1', '#c7c7d1', '#ececf1'], glow: '#9d9daa' },
   black: { mode: 'dark', base: '#000000', colors: ['#2c2c33', '#1d1d22', '#3a3a42'], glow: '#6e6e7a' },
 };
+setInterval(() => { if (state.settings?.theme?.style === 'mood' && root.dataset.tod !== timeOfDay()) applyTheme(); }, 60e3);
 function applyTheme() {
   const t = state.settings.theme;
   if (t.style === 'white' || t.style === 'black') { t.mode = t.style === 'white' ? 'light' : 'dark'; t.style = 'solid'; saveSettings(); }
-  const plain = PLAIN[t.style]; // plain white / black: no colour at all
+  const plain = PLAIN[t.style] || SKINS[t.style]; // looks with fixed colours (skins)
   root.dataset.mode = plain ? plain.mode : t.mode;
   root.dataset.plain = plain ? t.style : '';
+  root.dataset.tod = t.style === 'mood' ? timeOfDay() : ''; // the default look also gets a live background for the time of day
   const moodStyle = t.style === 'mood';
   const [c1, c2, c3] = plain ? plain.colors : moodStyle ? moodColors()[0] : t.colors;
   root.style.setProperty('--c1', c1);
@@ -882,17 +907,27 @@ function initDrop() {
     const paths = [...(e.dataTransfer?.files || [])].map((f) => api.pathOf(f)).filter(Boolean);
     const zone = zones.ai.classList.contains('hot') ? 'ai' : zones.shelf.classList.contains('hot') ? 'shelf' : null;
     for (const z of Object.values(zones)) z.classList.remove('hot');
-    if (view === 'open') { bus.emit('drop-open', { paths, target: e.target }); return; }
-    if (!paths.length || !zone) { setView('compact'); return; }
-    if (zone === 'shelf') {
+    if (view === 'open') {
+      // the AI page and the home page decide themselves; anywhere else the files go on the shelf
+      const onAi = activeTab === 'ai', onHome = activeTab === 'home';
+      bus.emit('drop-open', { paths, target: e.target });
+      if (!onAi && !onHome && paths.length) {
+        await api.invoke('shelf:add', paths);
+        flashBelow({ icon: '📥', title: paths.length > 1 ? `На полке: ${paths.length} файла` : 'Файл на полке', ms: 1800 });
+      }
+      return;
+    }
+    if (!paths.length) { setView('compact'); return; }
+    const target = zone || 'shelf'; // dropped on the island but not on a zone: the shelf
+    if (target === 'shelf') {
       await api.invoke('shelf:add', paths);
       setView('compact');
-      flashMood('mood-joy', 1500);
+      playTrick('hop'); // a small "got it", not a whole celebration
       flashBelow({ icon: '📥', title: paths.length > 1 ? `На полке: ${paths.length} файла` : 'Файл на полке', ms: 1800 });
-    } else {
-      openTab('ai');
-      bus.emit('ai-attach', paths);
+      return;
     }
+    openTab('ai');
+    bus.emit('ai-attach', paths);
   });
 }
 
@@ -902,6 +937,7 @@ const ctx = { resize, collapse, openTab, flash: flashBelow, toast: showToast, mo
 // ---------------- events from main ----------------
 function wire() {
   api.on('cursor', (p) => { onCursor(p); bus.emit('cursor', p); });
+  api.on('mood-flash', (p) => bus.emit('mood-flash', p)); // "Показать" in the settings
   api.on('ai-popup', (on) => { aiPopup = !!on; });
   api.on('blur', () => {
     closeMenu();
@@ -964,7 +1000,7 @@ function wire() {
   });
   api.on('toast', (t) => { playTrick('wink'); if (t.icon !== '⚠️') playSound('capture'); return view === 'open' || view === 'palette' ? flashBelow(t) : showToast(t); });
   api.on('fg-change', (n) => bus.emit('fg-change', n));
-  api.on('ocr-result', (r) => { openTab('text'); bus.emit('text-set', r.text); flashBelow({ icon: '🔤', title: r.translated ? 'Переведено и скопировано' : 'Текст скопирован в буфер', ms: 2200 }); });
+  api.on('ocr-result', (r) => { flashMood('mood-idea', 2200); /* read the text: got it! */ openTab('text'); bus.emit('text-set', r.text); flashBelow({ icon: '🔤', title: r.translated ? 'Переведено и скопировано' : 'Текст скопирован в буфер', ms: 2200 }); });
   api.on('fullscreen', (f) => {
     hideForFullscreen = f;
     stage.classList.toggle('hidden', stashed || (f && !hovering && view === 'compact'));

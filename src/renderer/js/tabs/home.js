@@ -1,4 +1,4 @@
-import { api, bus, state, $, $$, h, esc, icon, mediaIcon, clock, ago, bytes, wmo, saveSettings, glyphTile } from '../core.js';
+import { api, bus, state, $, $$, h, esc, icon, mediaIcon, clock, ago, bytes, wmo, saveSettings, glyphTile, setProgress } from '../core.js';
 import { eyesHTML } from '../characters.js';
 
 export const QUICK = {
@@ -44,7 +44,7 @@ function playerW() {
   $('.lyrb', w).onclick = () => { lyricsOn = !lyricsOn; w.classList.toggle('showlyr', lyricsOn); $('.lyrb', w).classList.toggle('on', lyricsOn); ctx.resize(); };
   $('.track', w).onclick = (e) => {
     const m = state.media, r = e.currentTarget.getBoundingClientRect();
-    if (m.canSeek && m.duration) api.invoke('media:cmd', 'seek', { position: ((e.clientX - r.left) / r.width) * m.duration });
+    if (m.canSeek && m.duration) { const k = (e.clientX - r.left) / r.width; setProgress(e.currentTarget, k); api.invoke('media:cmd', 'seek', { position: k * m.duration }); }
   };
   const vol = $('input', w);
   let volT;
@@ -78,7 +78,7 @@ function playerW() {
     $('[data-c="toggle"]', w).innerHTML = mediaIcon(m.playing ? 'pause' : 'play', 23);
     $('.pos', w).textContent = clock(m.position || 0);
     $('.dur', w).textContent = clock(m.duration || 0);
-    $('.track', w).style.setProperty('--p', m.duration ? m.position / m.duration : 0);
+    setProgress($('.track', w), m.duration ? m.position / m.duration : 0);
     syncLyrics();
   }
   let lyrKey = '';
@@ -301,7 +301,7 @@ export default {
       const s = JSON.stringify([state.settings.home, state.settings.quickActions]);
       if (s !== sig) { sig = s; render(); }
     });
-    bus.on('drop-open', ({ paths, target }) => { if (target.closest?.('.shelfw') || (target.closest?.('.page[data-id="home"]'))) api.invoke('shelf:add', paths); });
+    bus.on('drop-open', ({ paths, target }) => { if (paths.length && (target.closest?.('.shelfw') || target.closest?.('.page[data-id="home"]'))) api.invoke('shelf:add', paths).then(() => ctx.flash({ icon: '📥', title: paths.length > 1 ? `На полке: ${paths.length} файла` : 'Файл на полке', ms: 1600 })); });
   },
   show() { const g = $('.home', root); g.classList.remove('stagger'); void g.offsetWidth; g.classList.add('stagger'); },
 };

@@ -1,6 +1,6 @@
 // Custom right-click menu for the island: glass panel in the island's style
 // with quick tools, inline switches and "hide island".
-import { api, state, h, icon, saveSettings } from './core.js';
+import { api, state, h, icon, saveSettings, SKIN_LIST } from './core.js';
 
 let host, root, sub = null, closeTimer = null, subTimer = null;
 
@@ -77,7 +77,7 @@ function render() {
     ]),
     sep(),
     chips('Тема', [['dark', 'Тёмная'], ['light', 'Светлая']], () => s.theme.mode, (v) => set((x) => (x.theme.mode = v))),
-    chips('Материал', [['mood', 'По умолчанию'], ['liquid', 'Жидкий'], ['glass', 'Стекло'], ['gradient', 'Градиент'], ['solid', 'Сплошной']], () => s.theme.style, (v) => set((x) => { if (['white', 'black'].includes(x.theme.style)) x.theme.mode = x.theme.style === 'white' ? 'light' : 'dark'; x.theme.style = v; })),
+    chips('Материал', [['mood', 'По умолчанию'], ['liquid', 'Жидкий'], ['glass', 'Стекло'], ['gradient', 'Градиент'], ['solid', 'Сплошной'], ...SKIN_LIST], () => s.theme.style, (v) => set((x) => { if (['white', 'black'].includes(x.theme.style)) x.theme.mode = x.theme.style === 'white' ? 'light' : 'dark'; x.theme.style = v; })),
     chips('Характер', [['eyes', 'Глаза'], ['cat', 'Котик'], ['bunny', 'Зайка'], ['robot', 'Робот'], ['ghost', 'Призрак'], ['alien', 'Пришелец'], ['angel', 'Ангел'], ['frog', 'Лягушка'], ['devil', 'Чертёнок'], ['buddies', 'Человечки'], ['none', 'Никого']], () => s.island.character, (v) => set((x) => (x.island.character = v))),
     sep(),
     sw('drop', 'Края как вода', () => s.theme.water !== false, () => set((x) => (x.theme.water = x.theme.water === false))),
