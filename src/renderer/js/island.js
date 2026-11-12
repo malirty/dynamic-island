@@ -28,8 +28,44 @@ stage.append(fxl);
 // Pre-paint the big panel once after start, invisibly, so the very first opening doesn't stall
 setTimeout(() => { if (view !== 'compact') return; isl.classList.add('prewarm'); setTimeout(() => isl.classList.remove('prewarm'), 400); }, 3000);
 setInterval(() => positionFx(), 50);
+// the character also lives on the open island: in the header, between the tabs and the buttons,
+// so it is there on every tab. When the island opens or closes it walks over to its new place.
+$('.v-open .ohead .sp').innerHTML = `<div class="ochar">${eyesHTML('main open-eyes')}</div>`;
+const traveller = document.createElement('div');
+traveller.className = 'traveller';
+traveller.innerHTML = eyesHTML('main travel-eyes');
+stage.append(traveller);
+let travel = null;
+function faceFor(v) {
+  return v === 'compact' ? $('.v-compact .mid .eyes') : v === 'mini' ? $('.v-mini .mini-eyes') : v === 'toast' ? $('.v-toast .toast-eyes') : v === 'open' ? $('.v-open .open-eyes') : null;
+}
+function startTravel(from, to) {
+  const a = faceFor(from)?.getBoundingClientRect();
+  if (!a?.width || stage.classList.contains('hidden') || document.hidden) return;
+  if (travel) cancelAnimationFrame(travel.raf);
+  travel = { a: { x: a.left + a.width / 2, y: a.top + a.height / 2, s: a.width / 20 }, to, t0: performance.now(), raf: 0 };
+  stage.classList.add('travelling');
+  const step = (now) => {
+    const b = faceFor(travel.to)?.getBoundingClientRect();
+    const k = Math.min(1, (now - travel.t0) / 620);
+    if (!b?.width || k >= 1) { endTravel(); return; }
+    const e = k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; // ease in-out
+    const bx = b.left + b.width / 2, by = b.top + b.height / 2, bs = b.width / 20;
+    const x = travel.a.x + (bx - travel.a.x) * e, s = travel.a.s + (bs - travel.a.s) * e;
+    // a little hop on the way, like it jumps over
+    const y = travel.a.y + (by - travel.a.y) * e - Math.sin(k * Math.PI) * 10;
+    traveller.style.transform = `translate(${(x - 10).toFixed(1)}px, ${(y - 10).toFixed(1)}px) scale(${s.toFixed(3)})`;
+    travel.raf = requestAnimationFrame(step);
+  };
+  travel.raf = requestAnimationFrame(step);
+}
+function endTravel() {
+  if (travel) cancelAnimationFrame(travel.raf);
+  travel = null;
+  stage.classList.remove('travelling');
+}
 function positionFx() {
-  const host = view === 'compact' ? $('.v-compact .mid') : view === 'mini' ? $('.v-mini .mini-eyes') : view === 'toast' ? $('.v-toast .toast-eyes') : flash.classList.contains('on') ? $('#flash .flash-eyes') : null;
+  const host = travel ? traveller.firstElementChild : view === 'compact' ? $('.v-compact .mid') : view === 'mini' ? $('.v-mini .mini-eyes') : view === 'toast' ? $('.v-toast .toast-eyes') : flash.classList.contains('on') ? $('#flash .flash-eyes') : view === 'open' ? $('.v-open .open-eyes') : null;
   const r = host && !stage.classList.contains('hidden') ? host.getBoundingClientRect() : null;
   if (!r || !r.width) { fxl.style.opacity = '0'; return; }
   fxl.style.opacity = '';
@@ -156,12 +192,14 @@ function sendShape() {
 
 function setView(v) {
   if (v === view) { applySize(); return; }
+  const from = view;
   view = v;
   isl.dataset.view = v;
   isl.classList.toggle('open', v === 'open' || v === 'palette');
   if (v !== 'palette') closePalette(true);
   applySize();
   renderCompact(true);
+  if ((v === 'open') !== (from === 'open') && [from, v].every((x) => ['open', 'compact', 'mini', 'toast'].includes(x))) startTravel(from, v);
   bus.emit('view', v);
 }
 export function resize() { applySize(); }

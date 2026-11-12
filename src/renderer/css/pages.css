@@ -564,3 +564,11 @@ select.field option { background: #1a1a22; color: #eee; }
 .emo-row .emo-prev { flex: none; width: 74px; }
 .emo-row .emo-prev .mp { margin: 0; }
 .emo-row .sl2 small { white-space: normal; }
+
+/* ---------- the character in the open island's header ---------- */
+.ohead .sp { display: flex; align-items: center; justify-content: center; min-width: 40px; }
+.ochar { display: flex; align-items: center; justify-content: center; height: 30px; }
+.traveller { position: fixed; left: 0; top: 0; z-index: 55; pointer-events: none; display: none; transform-origin: 10px 10px; }
+#stage.travelling .traveller { display: block; }
+#stage.travelling :is(.v-compact .mid .eyes, .v-mini .mini-eyes, .v-toast .toast-eyes, .v-open .open-eyes) { visibility: hidden; }
+#stage:is(.char-none, .char-buddies) .traveller { display: none !important; }

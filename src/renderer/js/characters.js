@@ -17,7 +17,7 @@ export function eyesHTML(cls = 'main') {
 function mood() {
   if (temp) return temp;
   const sleepMin = state.settings?.island?.sleepAfterMin ?? 5;
-  const music = state.media?.playing;
+  const music = state.media?.playing && !state.silent; // playing and actually audible
   const busy = flags.agentWorking || state.downloads?.length > 0;
   const away = !music && !busy && !flags.aiThinking;
   if (away && state.idle > sleepMin * 60) return 'mood-sleep';
@@ -53,6 +53,10 @@ export function applyMood() {
   for (const c of ['cat', 'bunny', 'robot', 'ghost', 'alien', 'angel', 'frog', 'devil']) stage.classList.toggle('char-' + c, ch === c);
   stage.classList.toggle('nofx', state.settings?.island?.moodFx === false);
   document.documentElement.style.setProperty('--eyeBase', state.settings?.island?.eyeColor || 'var(--fg)');
+  // your own eye colour: only when calm (emotions keep their colours) or for every emotion
+  const ec = state.settings?.island?.eyeColor;
+  stage.classList.toggle('eyecol', !!ec);
+  stage.classList.toggle('eyecol-all', !!ec && state.settings?.island?.eyeScope === 'all');
 }
 
 // ---------- smooth blending between emotions ----------
@@ -152,6 +156,7 @@ function trickLoop() {
 export function initCharacters() {
   bus.on('cursor', (p) => { cursor = p; follow(); });
   bus.on('media', applyMood);
+  bus.on('silence', applyMood);
   bus.on('idle', applyMood);
   bus.on('settings', applyMood);
   bus.on('agents', applyMood);
@@ -179,7 +184,7 @@ export function initCharacters() {
     requestAnimationFrame(groove);
     const dt = Math.min(50, now - (lastFrame || now));
     lastFrame = now;
-    const on = stage.classList.contains('mood-dance') && state.media?.playing && !document.hidden;
+    const on = stage.classList.contains('mood-dance') && state.media?.playing && !state.silent && !document.hidden;
     const list = $$('.eyes:not(.fxl)');
     if (!on) { if (grooving) { grooving = false; for (const e of list) { e.style.translate = ''; e.style.rotate = ''; e.style.scale = ''; } } return; }
     grooving = true;
@@ -208,7 +213,8 @@ export function initCharacters() {
   });
   // waking up: any activity after being sleepy brings the eyes back at once
   bus.on('cursor', () => {
-    if (lastMood === 'mood-sleep' || lastMood === 'mood-sleepy') { state.idle = 0; applyMood(); playTrick('stretch'); } // wakes up with a stretch
+    if (temp) return; // a shown / short emotion plays to its end
+    if (lastMood === 'mood-sleep' || lastMood === 'mood-sleepy') { state.idle = 0; applyMood(); if (lastMood !== 'mood-sleep' && lastMood !== 'mood-sleepy') playTrick('stretch'); } // wakes up with a stretch, once
   });
   // copying something: a quick nod "got it"
   bus.on('clips', () => { if (!temp) playTrick('nod'); });

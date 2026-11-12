@@ -11,6 +11,8 @@ let prevBands = new Float32Array(24), fluxAvg = 0, lastTick = 0;
 const hits = { beat: 0, tick: 0 };
 window.__hits = hits; // dev aid: hit counters
 let stopTimer = null;
+let quietSince = 0;
+function setSilent(v) { if (state.silent === v) return; state.silent = v; bus.emit('silence', v); }
 
 async function startLive() {
   try {
@@ -61,6 +63,13 @@ function sample(t) {
   let sum = 0;
   for (let i = 0; i < bands.length; i++) sum += bands[i];
   const l = sum / bands.length;
+  // the player may still say "Playing" after the music stopped (track ended, a paused tab,
+  // an ad gap): real silence for a while means there is nothing to dance to
+  if (mode === 'live') {
+    if (l > 0.02) { quietSince = 0; setSilent(false); }
+    else if (!quietSince) quietSince = t;
+    else if (t - quietSince > 2500) setSilent(true);
+  }
   const b = (bands[0] + bands[1] + bands[2] + bands[3]) / 4;
   // normalize to the track's own recent peaks so loud and quiet songs both
   // "breathe": quiet parts dim, hits flare (instead of sitting at the maximum)
@@ -91,7 +100,7 @@ function loop(t) {
   raf = requestAnimationFrame(loop);
   const playing = state.media?.playing;
   if (playing) sample(t);
-  else { level *= 0.9; bass *= 0.85; for (let i = 0; i < bands.length; i++) bands[i] *= 0.88; }
+  else { quietSince = 0; setSilent(false); level *= 0.9; bass *= 0.85; for (let i = 0; i < bands.length; i++) bands[i] *= 0.88; }
   const dance = state.settings?.theme?.edgeDance !== false;
   state.level = dance ? level : 0;
   // only the dancing eyes/buddies use these; setting them on :root would
