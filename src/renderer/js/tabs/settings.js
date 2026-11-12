@@ -207,6 +207,7 @@ function hotkeyInput(key) {
 }
 
 let tgAskBox = null;
+let tgDraft = { phone: '', code: '', password: '' }; // typed values survive redraws
 function render() {
   const s = S();
   const parts = {};
@@ -250,7 +251,7 @@ function render() {
 
   const EMOTIONS = [
     ['', 'Спокоен', 'Обычное состояние, когда ничего не происходит. Следит за курсором, моргает, иногда сам делает трюки.'],
-    ['joy', 'Радуется', 'Агент (Claude / Codex) закончил задачу; включилась музыка.'],
+    ['joy', 'Радуется', 'Агент (Claude / Codex) закончил задачу.'],
     ['love', 'Влюблён', 'Погладь его: спокойно поводи мышью влево-вправо прямо над глазами 3 раза.'],
     ['shy', 'Смущается', 'Ткни в остров два раза подряд (через раз).'],
     ['laugh', 'Смеётся', 'Пощекочи: очень быстро поводи мышью по острову.'],
@@ -259,20 +260,27 @@ function render() {
     ['ponder', 'Размышляет', 'Работает агент Claude / Codex или ИИ готовит ответ.'],
     ['busy', 'Занят', 'Идёт загрузка файла.'],
     ['dance', 'Танцует', 'Играет музыка — качается и кивает в такт.'],
+    ['call', 'Разговаривает', 'Ты в звонке — Zoom, Telegram или Discord. Слушает и кивает, рядом трубка.'],
     ['confused', 'Не понял', 'Остров не понял команду, например время в напоминании.'],
     ['startle', 'Удивлён', 'Пришло уведомление; ты тянешь файл на остров.'],
     ['scared', 'Испугался', 'Ткни в остров три раза подряд.'],
-    ['sad', 'Грустит', 'Музыку поставили на паузу.'],
+    ['sad', 'Грустит', 'Пока только по кнопке «Показать».'],
     ['angry', 'Злится', 'Ошибка; или ткни в остров 4 раза подряд.'],
     ['bored', 'Скучает', 'Тебя нет около минуты.'],
     ['sleepy', 'Сонный', 'Тебя нет пару минут (ночью — раньше).'],
     ['sleep', 'Спит', 'Тебя нет дольше, чем указано в «Засыпать через». Пошевели мышью — проснётся и потянется.'],
   ];
+  // ★ — the favourite: the character stays in it when nothing else is going on
+  const NO_FAV = new Set(['call', 'startle', 'sleep']); // these only make sense as reactions
+  const fav = s.island.favMood || '';
   add('island', ...group('Эмоции — как вызвать',
-    ...EMOTIONS.map(([id, name, how]) => h('div', { class: 'srow emo-row', ...hint(name, how) },
+    h('div', { class: 'mnote', style: 'padding:8px 12px 2px' }, '★ — любимая эмоция: в ней персонаж находится по умолчанию, когда ничего не происходит. Сон, музыка, звонки и реакции работают как обычно.'),
+    ...EMOTIONS.map(([id, name, how]) => h('div', { class: 'srow emo-row' + (id === fav ? ' fav' : ''), ...hint(name, how) },
       h('div', { class: 'emo-prev', html: pill({ cls: 'emo', content: eyesMini(id ? 'e-' + id : '') }) }),
-      h('div', { class: 'sl2' }, name, h('small', {}, how)),
-      id ? h('button', { class: 'btn sm', onclick: () => api.invoke('island:mood', 'mood-' + id) }, 'Показать') : ''))));
+      h('div', { class: 'sl2' }, name, id === fav ? h('span', { class: 'favtag' }, 'по умолчанию') : '', h('small', {}, how)),
+      h('div', { class: 'row', style: 'gap:6px;flex:none' },
+        NO_FAV.has(id) ? '' : h('button', { class: 'favbtn' + (id === fav ? ' on' : ''), title: id === fav ? 'Это любимая эмоция' : 'Сделать любимой — персонаж будет в ней по умолчанию', onclick: () => { s.island.favMood = id; commit(); render(); } }, '★'),
+        id ? h('button', { class: 'btn sm', onclick: () => api.invoke('island:mood', 'mood-' + id) }, 'Показать') : '')))));
 
   add('island', ...group('Персонаж',
     row('Трюки сами по себе', 'крутится, прыгает, подмигивает', seg([['off', 'Выкл'], ['rare', 'Редко'], ['normal', 'Обычно'], ['often', 'Часто']], () => s.island.trickRate || 'normal', (v) => (s.island.trickRate = v)), 'Трюки', 'Как часто персонаж сам что-то вытворяет, когда ничего не происходит: крутится, прыгает, подмигивает, хихикает, выглядывает, пускает сердечки.'),
@@ -370,7 +378,7 @@ function render() {
 
   // notifications + telegram
   tgAskBox = h('div');
-  const tgStatus = h('span', { class: 'muted small' }, state.telegram === 'on' ? 'подключён' : state.telegram === 'connecting' ? 'подключаюсь…' : 'не подключён');
+  const tgStatus = h('span', { class: 'muted small tgst' }, tgStatusText());
   // sounds
   const snd = (s.sounds ||= { enabled: true, volume: 0.6, quietInDnd: true });
   snd.events ||= {}; snd.custom ||= {};
@@ -408,11 +416,26 @@ function render() {
     row('Уведомления Windows', 'показывать на острове', toggle(() => s.notifications.windows, (v) => (s.notifications.windows = v)), 'Windows', 'Остров читает новые уведомления Windows и показывает их у себя.'),
     row('Не беспокоить', 'остров молчит', toggle(() => s.dnd, (v) => (s.dnd = v)), 'Не беспокоить', 'Уведомления копятся тихо, персонажи не вздрагивают. Напоминания всё равно сработают.'),
     row('Агенты пробивают «Не беспокоить»', null, toggle(() => s.notifications.agentsBypassDnd, (v) => (s.notifications.agentsBypassDnd = v)), 'Агенты', 'Если Claude Code ждёт твоего ответа, остров позовёт даже в режиме тишины.'),
-    row('Telegram', 'личные сообщения на острове', h('div', { class: 'row' }, tgStatus, toggle(() => s.notifications.telegram, (v) => (s.notifications.telegram = v))), 'Telegram', 'Подключается как твой собственный клиент (как Telegram Desktop). Нужны api_id и api_hash с my.telegram.org — это бесплатно и занимает минуту.'),
+    row('Telegram', 'личные сообщения на острове', h('div', { class: 'row' }, tgStatus, toggle(() => s.notifications.telegram, (v) => (s.notifications.telegram = v))), 'Telegram', 'Подключается как твой собственный клиент (как ещё один Telegram Desktop): сообщения на острове и имя с аватаркой у голосовых в плеере. Войти можно по QR-коду с телефона или по номеру. Нужны api_id и api_hash с my.telegram.org — один раз, это бесплатно.'),
     row('api_id', null, text(() => s.telegram.apiId, (v) => (s.telegram.apiId = v.trim()), { style: 'width:160px' })),
     row('api_hash', null, h('div', { class: 'row' }, text(() => s.telegram.apiHash, (v) => (s.telegram.apiHash = v.trim()), { type: 'password', style: 'width:160px' }), h('button', { class: 'btn sm ghost', onclick: () => api.invoke('url:open', 'https://my.telegram.org/apps') }, 'Где взять'))),
     row('Только личные и упоминания', null, toggle(() => s.telegram.onlyPrivate, (v) => (s.telegram.onlyPrivate = v))),
-    h('div', { class: 'srow' }, h('button', { class: 'btn sm pri', onclick: async () => { s.notifications.telegram = true; await saveSettings(); api.invoke('telegram:start'); } }, 'Войти в Telegram'), s.telegram.session ? h('button', { class: 'btn sm ghost', onclick: () => api.invoke('telegram:logout') }, 'Выйти') : '', tgAskBox)));
+    tgAskBox));
+  renderTg();
+
+  // the mini Telegram's own look
+  const tu = (s.tgui ||= { accent: '#7c5cff', bubbles: 'round', size: 'm', wallpaper: 'theme', avatars: true, openOnClick: true });
+  const ACC = ['#7c5cff', '#2aabee', '#34c759', '#ff9f0a', '#ff375f', '#bf5af2', '#64d2ff', '#8e8e93'];
+  const accRow = h('div', { class: 'row', style: 'gap:6px' },
+    ...ACC.map((c) => h('button', { class: 'tgsw' + (tu.accent === c ? ' on' : ''), style: { background: c }, title: c, onclick: () => { tu.accent = c; commit(); render(); } })),
+    (() => { const sw = h('label', { class: 'swatch', title: 'Свой цвет', style: { background: ACC.includes(tu.accent) ? 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)' : tu.accent } }); const inp = h('input', { type: 'color', value: tu.accent || '#7c5cff' }); inp.oninput = () => { tu.accent = inp.value; sw.style.background = inp.value; bus.emit('settings', s); commitSoon(); }; sw.append(inp); return sw; })());
+  add('tg', ...group('Мини-Telegram',
+    row('Цвет моих сообщений', null, accRow, 'Цвет', 'Пузыри твоих сообщений, кнопки и отметки непрослушанных голосовых.'),
+    row('Форма сообщений', null, seg([['round', 'Скруглённые'], ['sharp', 'Строгие'], ['capsule', 'Капсулы']], () => tu.bubbles || 'round', (v) => (tu.bubbles = v)), 'Форма', 'Скруглённые — как в мессенджерах, строгие — почти прямоугольные, капсулы — полностью круглые края.'),
+    row('Размер текста', null, seg([['s', 'Мелкий'], ['m', 'Обычный'], ['l', 'Крупный']], () => tu.size || 'm', (v) => (tu.size = v)), 'Размер текста', 'Текст сообщений и поля ввода.'),
+    row('Фон чата', null, seg([['theme', 'Как остров'], ['aurora', 'Аврора'], ['dots', 'Точки'], ['none', 'Без фона']], () => tu.wallpaper || 'theme', (v) => (tu.wallpaper = v)), 'Фон чата', 'Как остров — мягкие пятна цветов твоего оформления. Аврора — северное сияние. Точки — спокойная сетка.'),
+    row('Аватарки', null, toggle(() => tu.avatars !== false, (v) => (tu.avatars = v)), 'Аватарки', 'Фото чатов в списке и в заголовке.'),
+    row('Уведомление открывает чат', null, toggle(() => tu.openOnClick !== false, (v) => (tu.openOnClick = v)), 'Открывать чат', 'Нажми на уведомление Telegram на острове — откроется этот чат с полем для ответа.')));
 
   // agents
   const inst = state.agentsInstalled || {};
@@ -443,7 +466,7 @@ function render() {
 const SECTIONS = [
   ['look', 'Внешний вид', 'palette'], ['island', 'Остров', 'eye'], ['layout', 'Вкладки и главная', 'home'],
   ['actions', 'Действия и центр', 'control'], ['ai', 'ИИ', 'ai'], ['weather', 'Погода', 'weather'],
-  ['notify', 'Уведомления', 'bell'], ['sounds', 'Звуки', 'volume'], ['agents', 'Агенты', 'agent'], ['keys', 'Горячие клавиши', 'grab'], ['app', 'Файлы и приложение', 'folder'],
+  ['notify', 'Уведомления', 'bell'], ['tg', 'Мини-Telegram', 'telegram'], ['sounds', 'Звуки', 'volume'], ['agents', 'Агенты', 'agent'], ['keys', 'Горячие клавиши', 'grab'], ['app', 'Файлы и приложение', 'folder'],
 ];
 let current = 'look', query = '', navEl, contentEl, searchEl;
 
@@ -480,15 +503,66 @@ function layout(parts) {
   }
 }
 
-function tgAsk(q) {
+// ---------- Telegram sign in: QR code or phone number ----------
+// Drawn from the login state kept in the main process, so a redraw never loses a step.
+const tgStatusText = () => (state.telegram === 'on' ? 'подключён' : state.telegram === 'connecting' ? 'подключаюсь…' : 'не подключён');
+function renderTg() {
+  for (const e of document.querySelectorAll('.tgst')) e.textContent = tgStatusText();
   if (!tgAskBox) return;
-  current = 'notify'; query = ''; render();
-  const i = h('input', { class: 'field', placeholder: q.label, type: q.kind === 'password' ? 'password' : 'text', style: 'width:200px' });
-  const ok = h('button', { class: 'btn sm pri', onclick: () => { api.invoke('telegram:answer', i.value.trim()); tgAskBox.innerHTML = '<span class="muted small">Проверяю…</span>'; } }, 'OK');
-  tgAskBox.innerHTML = '';
-  tgAskBox.append(h('div', { class: 'row' }, i, ok));
-  i.onkeydown = (e) => { if (e.key === 'Enter') ok.click(); };
-  i.focus();
+  const l = state.tgLogin || { step: 'idle' };
+  const s = state.settings;
+  const box = tgAskBox;
+  box.className = 'tglogin';
+  box.innerHTML = '';
+  const err = l.error ? h('div', { class: 'small', style: 'color:var(--bad)' }, l.error) : '';
+  const cancel = h('button', { class: 'btn sm ghost', onclick: () => api.invoke('telegram:cancel') }, 'Отмена');
+  const field = (key, ph, type = 'text', onEnter) => {
+    const i = h('input', { class: 'field', placeholder: ph, type, value: tgDraft[key] || '', style: 'width:210px', autocomplete: 'off' });
+    i.oninput = () => (tgDraft[key] = i.value);
+    i.onkeydown = (e) => { if (e.key === 'Enter') onEnter(); };
+    setTimeout(() => i.focus(), 30);
+    return i;
+  };
+  const hasKeys = s.telegram.apiId && s.telegram.apiHash;
+  if (state.telegram === 'on' && s.telegram.session) {
+    box.append(h('div', { class: 'row' }, h('span', { class: 'small', style: 'color:var(--ok);font-weight:650' }, '✓ Вход выполнен'), h('div', { class: 'grow' }),
+      h('button', { class: 'btn sm ghost', onclick: () => api.invoke('telegram:logout') }, 'Выйти')));
+    return;
+  }
+  if (l.step === 'busy') { box.append(h('div', { class: 'muted small' }, l.text || 'Подключаюсь…'), cancel); return; }
+  if (l.step === 'qr') {
+    box.append(h('div', { class: 'tgqr' }, h('img', { src: l.qr, width: 168, height: 168, alt: 'QR' }),
+      h('div', { class: 'small', style: 'line-height:1.5' },
+        h('div', { style: 'font-weight:650;margin-bottom:4px' }, 'Отсканируй телефоном'),
+        h('div', { class: 'muted' }, 'Telegram на телефоне → Настройки → Устройства → Подключить устройство, и наведи камеру на код.'),
+        h('div', { style: 'margin-top:8px' }, cancel))), err);
+    return;
+  }
+  if (l.step === 'code') {
+    const send = () => { api.invoke('telegram:answer', tgDraft.code); tgDraft.code = ''; state.tgLogin = { step: 'busy', text: 'Проверяю код…' }; renderTg(); };
+    box.append(h('div', { class: 'small muted' }, l.viaApp ? 'Код пришёл в Telegram (на телефоне или в Telegram Desktop)' : 'Код пришёл по SMS'),
+      h('div', { class: 'row' }, field('code', 'Код', 'text', send), h('button', { class: 'btn sm pri', onclick: send }, 'Войти'), cancel), err);
+    return;
+  }
+  if (l.step === 'password') {
+    const send = () => { api.invoke('telegram:answer', tgDraft.password); tgDraft.password = ''; state.tgLogin = { step: 'busy', text: 'Проверяю пароль…' }; renderTg(); };
+    box.append(h('div', { class: 'small muted' }, 'У аккаунта включена двухэтапная проверка' + (l.hint ? ` (подсказка: ${l.hint})` : '')),
+      h('div', { class: 'row' }, field('password', 'Облачный пароль', 'password', send), h('button', { class: 'btn sm pri', onclick: send }, 'OK'), cancel), err);
+    return;
+  }
+  // idle: choose how to sign in
+  const go = async (method) => {
+    if (!hasKeys) { state.tgLogin = { step: 'idle', error: 'Сначала впиши api_id и api_hash ниже' }; renderTg(); return; }
+    if (method === 'phone' && !/^\+?\d{7,15}$/.test((tgDraft.phone || '').replace(/[\s()-]/g, ''))) { state.tgLogin = { step: 'idle', phoneOpen: true, error: 'Впиши номер в формате +380…' }; renderTg(); return; }
+    await saveSettings();
+    state.tgLogin = { step: 'busy', text: 'Подключаюсь к Telegram…' }; renderTg();
+    api.invoke('telegram:login', method, '+' + (tgDraft.phone || '').replace(/[\s()+-]/g, ''));
+  };
+  box.append(h('div', { class: 'row', style: 'gap:8px;flex-wrap:wrap' },
+    h('button', { class: 'btn sm pri', onclick: () => go('qr') }, 'Войти по QR-коду'),
+    h('button', { class: 'btn sm', onclick: () => { state.tgLogin = { step: 'idle', phoneOpen: !l.phoneOpen }; renderTg(); } }, 'По номеру телефона')));
+  if (l.phoneOpen || tgDraft.phone) box.append(h('div', { class: 'row' }, field('phone', '+380 …', 'tel', () => go('phone')), h('button', { class: 'btn sm pri', onclick: () => go('phone') }, 'Получить код')));
+  if (err) box.append(err);
 }
 
 // Mounts the settings UI into the standalone settings window.
@@ -508,9 +582,10 @@ export function mountSettings(el, c, startSection) {
   el.append(wrap);
   showHint('Наведи на настройку', 'Здесь появится, что именно она меняет. Всё применяется сразу.');
   render();
-  bus.on('telegram-ask', tgAsk);
+  api.invoke('telegram:loginState').then((l) => { state.tgLogin = l; renderTg(); });
+  bus.on('telegram-login', (l) => { state.tgLogin = l; if (l.step !== 'idle' && current !== 'notify') { current = 'notify'; query = ''; render(); } else renderTg(); });
   bus.on('settings-external', render);
-  bus.on('telegram-status', (st) => { state.telegram = st.status; if (st.error) ctx.flash({ icon: '✈️', title: 'Telegram: ' + st.error, ms: 3500 }); if (st.status === 'on' && tgAskBox) tgAskBox.innerHTML = '<span class="small" style="color:var(--ok)">Подключено</span>'; });
+  bus.on('telegram-status', (st) => { state.telegram = st.status; if (st.error) ctx.flash({ icon: '✈️', title: 'Telegram: ' + st.error, ms: 3500 }); renderTg(); });
   return { open: (id) => { current = id; query = ''; searchEl.value = ''; render(); } };
 }
 

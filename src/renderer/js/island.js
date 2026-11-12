@@ -1,4 +1,4 @@
-import { api, bus, state, $, $$, h, esc, icon, mediaIcon, clock, bytes, coverColor, saveSettings, glyphTile, weatherIcon, EYE_FX, setProgress, SKINS } from './core.js';
+import { api, bus, state, $, $$, h, esc, icon, mediaIcon, clock, bytes, coverColor, saveSettings, glyphTile, weatherIcon, EYE_FX, setProgress, SKINS, setPP } from './core.js';
 import { audioActive } from './audio.js';
 import { play as playSound } from './sounds.js';
 import { initWater } from './water.js';
@@ -15,8 +15,9 @@ import notes from './tabs/notes.js';
 import weather from './tabs/weather.js';
 import control from './tabs/control.js';
 import settings from './tabs/settings.js';
+import tg from './tabs/tg.js';
 
-const TABS = { home, clip, ai, text, notes, weather, control, settings };
+const TABS = { home, clip, ai, text, notes, weather, control, tg, settings };
 const root = document.documentElement;
 const stage = $('#stage');
 // effects (loading ring, bulb, notes, hearts, zZ, sparks…) float in their own layer
@@ -91,11 +92,40 @@ let stashed = false, stashArmed = false;
 function stash() {
   stashed = true; stashArmed = false;
   isl.style.translate = '';
-  if (view !== 'compact') setView('compact');
+  // the mini island / toast slides up as it is; it turns back into the pill only once it is out of sight
+  // (switching first made it snap into the small island right under the finger)
   stage.classList.add('hidden', 'stashing');
+  if (view !== 'compact') setTimeout(() => { if (stashed && view !== 'compact') setView('compact'); }, 480);
   setTimeout(() => stage.classList.remove('stashing'), 600);
   renderCompact(true);
   sendShape();
+}
+// Hidden from the menu: a sad look, then it slowly floats up and away; only then the window goes.
+let leaving = false;
+function goodbye(minutes) {
+  if (leaving) return;
+  leaving = true;
+  if (view !== 'compact') setView('compact');
+  flashMood('mood-sad', 2200);
+  stage.classList.add('leaving');
+  setTimeout(() => {
+    stage.classList.add('hidden', 'stashing', 'goodbye');
+    sendShape();
+    setTimeout(() => {
+      api.invoke('island:hide', minutes || 0);
+      stage.classList.remove('stashing', 'goodbye', 'leaving');
+      leaving = false;
+    }, 1000);
+  }, 750);
+}
+// shown again (tray, hotkey, timer): slides back down
+function welcomeBack() {
+  if (stashed) { unstash(); return; }
+  if (!stage.classList.contains('hidden')) return;
+  stage.classList.remove('hidden');
+  renderCompact(true);
+  sendShape();
+  playTrick('stretch');
 }
 function unstash() {
   if (!stashed) return;
@@ -172,7 +202,7 @@ function sendShape() {
     const extraBelow = stage.classList.contains('char-buddies') && view === 'compact' || view === 'mini' ? 30 : 0;
     rects.push({ x: x - M, y: 0, width: size.w + 2 * M, height: TOP + size.h + M + extraBelow });
     hit.push({ x: x - 2, y: 0, width: size.w + 4, height: TOP + size.h + 4 });
-    const ba = bubblesHitArea(x + size.w, TOP);
+    const ba = bubblesHitArea(x + size.w, TOP, size.h);
     if (ba) { rects.push(ba); hit.push(ba); }
     if (flash.classList.contains('on')) rects.push({ x: WIN.w / 2 - 200, y: TOP + size.h, width: 400, height: 70 });
   }
@@ -290,9 +320,9 @@ function renderCompact(force) {
     const m = state.media;
     key += m.key + m.thumb?.length;
     key += m.playing ? 'p' : 's';
-    html = `<div class="side"><div class="cover" style="background-image:url('${m.thumb || ''}')"></div><div class="marq js-marq" data-t="${esc(m.title || '')}"><span>${esc(m.title)}</span></div></div>
+    html = `<div class="side"><div class="cover${m.soundOnly ? ' snd' : ''}" style="background-image:url('${m.thumb || ''}')">${m.soundOnly ? icon('volume', 12) : ''}</div><div class="marq js-marq" data-t="${esc(m.title || '')}"><span>${esc(m.title)}</span></div></div>
       <div class="mid">${eyes}</div>
-      <div class="side r"><div class="mpc"><button class="mpb" data-media="prev">${mediaIcon('prev', 13)}</button><button class="mpb big" data-media="toggle">${mediaIcon(m.playing ? 'pause' : 'play', 14)}</button><button class="mpb" data-media="next">${mediaIcon('next', 13)}</button></div><div class="bars">${'<i></i>'.repeat(5)}</div><button class="cbtn-s ghost fold" data-fold title="Свернуть в кружок сбоку">${icon('chevron', 13)}</button></div>`;
+      <div class="side r">${m.soundOnly ? '' : `<div class="mpc"><button class="mpb" data-media="prev">${mediaIcon('prev', 13)}</button><button class="mpb big" data-media="toggle">${mediaIcon(m.playing ? 'pause' : 'play', 14)}</button><button class="mpb" data-media="next">${mediaIcon('next', 13)}</button></div>`}<div class="bars">${'<i></i>'.repeat(5)}</div><button class="cbtn-s ghost fold" data-fold title="Свернуть в кружок сбоку">${icon('chevron', 13)}</button></div>`;
   } else if (kind === 'download') {
     const d = a.dl;
     key += d.name;
@@ -312,7 +342,7 @@ function renderCompact(force) {
     key += c.icon ? 'i' : '';
     html = `<div class="side"><span class="callapp">${callLogo(c, 'callico')}<span>${esc(c.name)}</span></span><span class="dim js-sub" style="font-variant-numeric:tabular-nums">${clock((Date.now() - c.since) / 1000)}</span></div>
       <div class="mid">${eyes}</div>
-      <div class="side r"><button class="cbtn-s ghost" data-fold title="Свернуть звонок в значок">${icon('chevron', 13)}</button><button class="cbtn-s${c.micMuted ? ' muted' : ''}" data-call="mic" title="${c.micMuted ? 'Включить микрофон' : 'Выключить микрофон'}">${icon(c.micMuted ? 'micoff' : 'mic', 14)}</button><button class="cbtn-s${c.soundMuted ? ' muted' : ''}" data-call="sound" title="${c.soundMuted ? 'Вернуть звук звонка' : 'Заглушить звук звонка'}">${icon(c.soundMuted ? 'mute' : 'volume', 14)}</button></div>`;
+      <div class="side r"><button class="cbtn-s ghost" data-fold title="Свернуть звонок в значок">${icon('chevron', 13)}</button><button class="cbtn-s${c.micMuted ? ' muted' : ''}" data-call="mic" data-cid="${esc(c.id)}" title="${c.micMuted ? 'Включить микрофон' : 'Выключить микрофон'}">${icon(c.micMuted ? 'micoff' : 'mic', 14)}</button><button class="cbtn-s${c.soundMuted ? ' muted' : ''}" data-call="sound" data-cid="${esc(c.id)}" title="${c.soundMuted ? 'Вернуть звук звонка' : 'Заглушить звук звонка'}">${icon(c.soundMuted ? 'mute' : 'volume', 14)}</button><button class="cbtn-s hang" data-call="hangup" data-cid="${esc(c.id)}" title="Отключиться от звонка">${icon('hangup', 14)}</button></div>`;
   } else if (kind === 'timer') {
     key += a.timer.id;
     html = `<div class="side"><span class="tmr">${icon('timer', 15)}</span><span class="dim marq"><span>${esc(a.timer.text || 'Таймер')}</span></span></div><div class="mid">${eyes}</div><div class="side r"><span class="js-sub" style="font-variant-numeric:tabular-nums">${clock((a.timer.at - Date.now()) / 1000)}</span><button class="cbtn-s ghost fold" data-fold title="Свернуть в кружок сбоку">${icon('chevron', 13)}</button></div>`;
@@ -399,26 +429,37 @@ function callLogo(c, cls) {
 }
 
 // ---------------- mini player (hover) ----------------
+// the player can be put away from the mini island (×) and brought back (♪ in the summary);
+// a new track brings it back by itself
+let miniMusicOff = null; // the track it was put away for
 function renderMini() {
   const m = state.media;
   const el = $('.v-mini');
-  if (!m?.active || playerHidden()) return renderMiniSummary(el);
+  if (miniMusicOff && m?.key !== miniMusicOff) miniMusicOff = null;
+  if (!m?.active || playerHidden() || miniMusicOff) return renderMiniSummary(el);
   el.classList.remove('sum');
   const key = m.key + (m.thumb?.length || 0);
   if (el.dataset.key !== key) {
     el.dataset.key = key;
-    el.innerHTML = `<div class="art" style="background-image:url('${m.thumb || ''}')"></div>
+    el.classList.toggle('soundonly', !!m.soundOnly); // sound from an app without media controls: nothing to press
+    el.innerHTML = `<div class="art" style="background-image:url('${m.thumb || ''}')">${m.soundOnly ? icon('volume', 26) : ''}</div>
       <div class="meta"><div class="trow"><div class="t">${esc(m.title)}</div>${eyesHTML('main mini-eyes')}</div><div class="a">${esc(m.artist || m.app)}</div>
         <div class="prog"><span class="js-pos">0:00</span><div class="track js-seek"><i></i></div><span class="js-dur">${clock(m.duration || 0)}</span></div></div>
-      <div class="ctl"><button class="cbtn" data-c="prev">${mediaIcon('prev', 19)}</button><button class="cbtn big js-pp" data-c="toggle"></button><button class="cbtn" data-c="next">${mediaIcon('next', 19)}</button></div>`;
-    for (const b of $$('[data-c]', el)) b.onclick = (e) => { e.stopPropagation(); api.invoke('media:cmd', b.dataset.c); };
+      <div class="ctl"><button class="cbtn" data-c="prev">${mediaIcon('prev', 19)}</button><button class="cbtn big js-pp" data-c="toggle"></button><button class="cbtn" data-c="next">${mediaIcon('next', 19)}</button></div>
+      <button class="mini-x" data-mx title="Скрыть плеер">${icon('close', 10)}</button>`;
+    $('[data-mx]', el).onclick = (e) => { e.stopPropagation(); miniMusicOff = m.key; el.dataset.key = ''; renderMini(); };
+    for (const b of $$('[data-c]', el)) b.onclick = (e) => {
+      e.stopPropagation();
+      if (b.dataset.c === 'toggle') setPP(b, !state.media?.playing, 19, 1500); // show the new state at once
+      api.invoke('media:cmd', b.dataset.c);
+    };
     $('.js-seek', el).onclick = (e) => {
       e.stopPropagation();
       const r = e.currentTarget.getBoundingClientRect();
       if (m.canSeek && m.duration) { const k = (e.clientX - r.left) / r.width; setProgress(e.currentTarget, k); api.invoke('media:cmd', 'seek', { position: k * m.duration }); }
     };
   }
-  $('.js-pp', el).innerHTML = mediaIcon(m.playing ? 'pause' : 'play', 19);
+  setPP($('.js-pp', el), m.playing, 19);
   $('.js-pos', el).textContent = clock(m.position || 0);
   $('.js-dur', el).textContent = clock(m.duration || 0);
   setProgress($('.track', el), m.duration ? m.position / m.duration : 0);
@@ -427,12 +468,15 @@ function renderMini() {
 // Mini island without music: big clock, weather and a few quick actions.
 function renderMiniSummary(el) {
   el.classList.add('sum');
-  if (el.dataset.key !== 'sum') {
-    el.dataset.key = 'sum';
+  const back = !!(miniMusicOff && state.media?.active && !playerHidden()); // the player was put away: offer it back
+  if (el.dataset.key !== 'sum' + back) {
+    el.dataset.key = 'sum' + back;
     const acts = [['region', 'Скриншот'], ['timer', 'Таймер'], ['ai', 'ИИ'], ['clip', 'Буфер']];
     el.innerHTML = `<div class="ms-clock"><b class="js-mt"></b><small class="js-md"></small></div>
       <div class="ms-w js-mw"></div>
-      <div class="ms-acts">${acts.map(([id, t]) => `<button class="cbtn" data-q="${id}" title="${t}">${icon(QUICK[id].icon, 17)}</button>`).join('')}</div>`;
+      <div class="ms-acts">${back ? `<button class="cbtn ms-back" data-back title="Вернуть плеер">${icon('lyrics', 17)}</button>` : ''}${acts.map(([id, t]) => `<button class="cbtn" data-q="${id}" title="${t}">${icon(QUICK[id].icon, 17)}</button>`).join('')}</div>`;
+    const bb = $('[data-back]', el);
+    if (bb) bb.onclick = (e) => { e.stopPropagation(); miniMusicOff = null; el.dataset.key = ''; renderMini(); };
     for (const b of $$('[data-q]', el)) b.onclick = (e) => { e.stopPropagation(); QUICK[b.dataset.q].run(ctx); };
   }
   $('.js-mt', el).textContent = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
@@ -641,6 +685,7 @@ export function collapse(release) {
 const MOOD_PALETTES = {
   '': [['#7c5cff', '#00d4ff', '#ff4fd8'], '#7c5cff'],
   angry: [['#ff2e3c', '#ff7a3d', '#c3133a'], '#ff3b3b'],
+  call: [['#34c759', '#22c7b4', '#4ade80'], '#34c759'],
   sleepy: [['#7c4dff', '#b39dff', '#4b2fb0'], '#9b7bff'],
   sleep: [['#5b3fd1', '#8f73ff', '#2c1d6e'], '#7a5cff'],
   busy: [['#00a8ff', '#4fd8ff', '#1f5cff'], '#3cc8ff'],
@@ -751,8 +796,11 @@ function onCursor(p) {
   const dx = p.x - (r.left + r.width / 2), dy = p.y - (r.top + r.height / 2);
   const edgeDist = Math.max(0, Math.max(Math.abs(dx) - r.width / 2, Math.abs(dy) - r.height / 2));
   const near = Math.max(0, 1 - edgeDist / 180);
+  lostCheck(p, near, dx);
   state.near = near;
-  stage.classList.toggle('curious', state.settings.island.cursorReactions !== false && near > 0.35 && !inside && (view === 'compact' || view === 'mini'));
+  // a little gap between "on" and "off" so it doesn't flicker at the edge
+  const wasCurious = stage.classList.contains('curious');
+  stage.classList.toggle('curious', state.settings.island.cursorReactions !== false && near > (wasCurious ? 0.28 : 0.42) && !inside && (view === 'compact' || view === 'mini'));
   const small = view === 'compact' || view === 'mini' || view === 'toast';
   let tx = 0, ty = 0, rx = 0, ry = 0, sc = 1;
   if (state.settings?.theme?.reactive && small && !onBubble) {
@@ -771,6 +819,25 @@ function onCursor(p) {
   if (hovering !== was) onHover(hovering);
 }
 
+// ---- "where did the mouse go?" ----
+// The cursor was right by the character and suddenly flew far away (a flick, or off to another
+// screen): it looks around for it, a "?" pops up, then it shrugs. At most every 20 s.
+let lostNearT = 0, lostNearX = 0, lostLast = -1e9, lostPrev = null;
+function lostCheck(p, near, dx) {
+  const now = performance.now();
+  if (near > 0.45) { lostNearT = now; lostNearX = dx; }
+  const jump = lostPrev ? Math.hypot(p.x - lostPrev.x, p.y - lostPrev.y) : 0;
+  lostPrev = { x: p.x, y: p.y };
+  if (near > 0 || !lostNearT || now - lostNearT > 280 || now - lostLast < 20000) return;
+  if (jump < 160 && now - lostNearT > 120) return; // it just walked away: that's not "lost"
+  if (state.settings.island.cursorReactions === false || !(view === 'compact' || view === 'mini')) return;
+  if (/mood-sleep|mood-call/.test(stage.className)) return;
+  lostLast = now; lostNearT = 0;
+  stage.style.setProperty('--lostDir', lostNearX < 0 ? '-1' : '1'); // first looks where it flew off to
+  playTrick('lost');
+}
+window.__lost = () => { lostLast = 0; stage.style.setProperty('--lostDir', '1'); playTrick('lost'); }; // dev aid
+
 // ---- playing with the island & resting on it ----
 // Wiggling the mouse fast over the island makes it happy (like being played with);
 // resting the cursor on it (still or very slow) for 2 s opens the mini island.
@@ -780,7 +847,7 @@ let restShy = false, lastShy = 0;
 // The character walks along the free middle of the pill: wanders on its own and
 // comes over to the cursor. Movement is a damped spring (smooth start and stop),
 // and it never steps onto the text on either side.
-let walkNext = 0, wv = 0, wTarget = 0, wMin = 0, wMax = 0, wLast = 0, bob = null;
+let walkNext = 0, wv = 0, wSquash = 0, wTilt = 0, wTarget = 0, wMin = 0, wMax = 0, wLast = 0, bob = null;
 // what is actually drawn in a side (text nodes included), in screen pixels
 function sideBox(side) {
   let l = Infinity, r = -Infinity;
@@ -853,19 +920,38 @@ function walkFrame(now) {
     mid.style.translate = walkX.toFixed(2) + 'px 0';
     positionFx();
   }
-  // stretches in the direction it moves, then settles back round
-  const st = Math.min(0.28, Math.abs(wv) / 160);
-  const sk = `${(1 + st).toFixed(3)} ${(1 - st * 0.55).toFixed(3)}`;
-  if (mid._sk !== sk) { mid._sk = sk; mid.style.scale = sk; mid.style.rotate = (wv * 0.05).toFixed(2) + 'deg'; }
+  // stretches in the direction it moves, then settles back round. The squash eases toward the
+  // speed instead of following it frame by frame, so a sudden mouse jerk doesn't flatten it at once.
+  const stTarget = Math.min(0.22, Math.abs(wv) / 190);
+  const ease = 1 - Math.exp(-dt * 8); // ~0.12 s to catch up
+  wSquash += (stTarget - wSquash) * ease;
+  wTilt += (wv * 0.045 - wTilt) * ease;
+  const st = wSquash < 0.002 ? 0 : wSquash;
+  const sk = `${(1 + st).toFixed(3)} ${(1 - st * 0.5).toFixed(3)}`;
+  if (mid._sk !== sk) { mid._sk = sk; mid.style.scale = sk; mid.style.rotate = wTilt.toFixed(2) + 'deg'; }
   if (bob) stopBob();
 }
 requestAnimationFrame(walkFrame);
 let petDir = 0, petTurns = 0, petT0 = 0, lastPet = 0;
+// where the face is right now: in the pill, the mini island, a toast or the open island's header
+function faceBox() {
+  const f = travel ? null : view === 'compact' ? $('.v-compact .mid') : faceFor(view);
+  const r = f?.getBoundingClientRect();
+  return r?.width ? r : null;
+}
+let overFace = false, lastFaceHi = 0;
 function trackPet(p, now) {
-  const face = $('.v-compact .mid');
-  if (!face || !lastP || view !== 'compact') return;
-  const r = face.getBoundingClientRect();
-  if (Math.abs(p.x - (r.left + r.width / 2)) > 60 || p.y > r.bottom + 14) { petTurns = 0; return; }
+  const r = faceBox();
+  if (!r || !lastP) return;
+  const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  // on the open island the face is small among buttons: say hi when the cursor runs over it
+  if (view === 'open') {
+    const on = Math.abs(p.x - cx) < 18 && Math.abs(p.y - cy) < 16;
+    if (on && !overFace && now - lastFaceHi > 2500 && !currentMood()) { lastFaceHi = now; playTrick('giggle'); }
+    overFace = on;
+  }
+  const reach = view === 'compact' ? 60 : 38;
+  if (Math.abs(p.x - cx) > reach || p.y > r.bottom + 14 || (view !== 'compact' && p.y < r.top - 18)) { petTurns = 0; return; }
   const dx = p.x - lastP.x;
   const sp = (Math.abs(dx) / Math.max(1, now - lastT)) * 1000;
   if (Math.abs(dx) < 2 || sp > 900) return; // strokes are calm, not frantic
@@ -889,7 +975,9 @@ function trackPlay(p, inside) {
     const dt = Math.max(1, now - lastT);
     const dist = Math.hypot(p.x - lastP.x, p.y - lastP.y);
     const speed = (dist / dt) * 1000;
-    if (speed > 1300) {
+    const fb = view === 'compact' || view === 'mini' ? true : faceBox();
+    const nearFace = fb === true || (fb && Math.hypot(p.x - (fb.left + fb.width / 2), p.y - (fb.top + fb.height / 2)) < 70);
+    if (speed > 1300 && nearFace) {
       if (!playT0 || now - playT0 > 1400) { playT0 = now; playDist = 0; }
       playDist += dist;
       if (playDist > 1100 && now - lastHappy > 3500) {
@@ -902,7 +990,11 @@ function trackPlay(p, inside) {
 setInterval(() => {
   if (!islandHover || view !== 'compact' || hideForFullscreen) return;
   const restFor = restAt ? performance.now() - restT : 0;
-  if (restAt && restFor >= (state.settings.island.miniDelay ?? 1.5) * 1000) { restAt = null; renderMini(); setView('mini'); }
+  if (restAt && restFor >= (state.settings.island.miniDelay ?? 1.5) * 1000) {
+    const under = document.elementFromPoint(restAt.x, restAt.y);
+    if (under?.closest('button, [data-call], [data-media], [data-fold], a')) { restT = performance.now(); return; } // on a button: stay as is
+    restAt = null; renderMini(); setView('mini');
+  }
 }, 120);
 let hoverTimer = null;
 function onHover(on) {
@@ -947,7 +1039,7 @@ function initDrop() {
     for (const z of Object.values(zones)) z.classList.remove('hot');
     if (view === 'open') {
       // the AI page and the home page decide themselves; anywhere else the files go on the shelf
-      const onAi = activeTab === 'ai', onHome = activeTab === 'home';
+      const onAi = activeTab === 'ai', onHome = activeTab === 'home' || activeTab === 'tg'; // Telegram takes files into the open chat
       bus.emit('drop-open', { paths, target: e.target });
       if (!onAi && !onHome && paths.length) {
         await api.invoke('shelf:add', paths);
@@ -975,6 +1067,8 @@ const ctx = { resize, collapse, openTab, flash: flashBelow, toast: showToast, mo
 // ---------------- events from main ----------------
 function wire() {
   api.on('cursor', (p) => { onCursor(p); bus.emit('cursor', p); });
+  window.__cursor = (p) => { onCursor(p); bus.emit('cursor', p); }; // dev aid: move the cursor in tests
+  window.__view = (v) => { if (v === 'mini') renderMini(); setView(v); }; // dev aid: switch views in tests
   api.on('mood-flash', (p) => bus.emit('mood-flash', p)); // "Показать" in the settings
   api.on('ai-popup', (on) => { aiPopup = !!on; });
   api.on('blur', () => {
@@ -1015,6 +1109,8 @@ function wire() {
   });
   api.on('calls', (c) => {
     state.calls = c;
+    stage.classList.toggle('oncall', !!c?.length); // its own animation, not the music one
+    bus.emit('calls', c);
     bus.emit('calls', c);
     renderCompact(true);
   });
@@ -1051,8 +1147,9 @@ function wire() {
   api.on('island-toggle', (force) => { if (view === 'open' && !force) collapse(true); else expand(); });
   api.on('open-tab', (id) => openTab(id));
   api.on('capture-hide', (on) => stage.classList.toggle('capturing', on));
-  api.on('telegram-ask', (q) => bus.emit('telegram-ask', q));
-  api.on('telegram-status', (s) => bus.emit('telegram-status', s));
+  api.on('island-shown', welcomeBack);
+  api.on('telegram-status', (s) => { state.telegram = s.status; bus.emit('telegram-status', s); });
+  api.on('tg-new', (p) => bus.emit('tg-new', p)); // live messages for the mini Telegram
 }
 
 // ---------------- boot ----------------
@@ -1067,7 +1164,7 @@ async function boot() {
   applyTheme();
   initCharacters();
   initWater();
-  initMenu({ refresh: () => sendShape(), openTab, palette: () => { setView('palette'); openPalette(); }, hideMusic });
+  initMenu({ refresh: () => sendShape(), openTab, palette: () => { setView('palette'); openPalette(); }, hideMusic, goodbye });
   initPalette({ setView, resize, collapse, openTab, flash: flashBelow });
   buildTabs();
   initJelly(document.querySelector('.pages'));
@@ -1081,7 +1178,12 @@ async function boot() {
 
   // poking the island many times in a row makes it angry
   let pokes = [];
-  isl.addEventListener('pointerdown', () => {
+  isl.addEventListener('pointerdown', (e) => {
+    // on the open island only a poke at the face counts (not clicks on buttons and cards)
+    if (view !== 'compact' && view !== 'mini') {
+      const r = faceBox();
+      if (!r || Math.abs(e.clientX - (r.left + r.width / 2)) > 22 || Math.abs(e.clientY - (r.top + r.height / 2)) > 20) return;
+    }
     const now = Date.now();
     pokes = pokes.filter((t) => now - t < 1500);
     pokes.push(now);
@@ -1137,7 +1239,14 @@ async function boot() {
     if (e.target.closest('[data-fold]')) { foldActivity(primaryActivity()?.key); return; }
     const callBtn = e.target.closest('[data-call]');
     if (callBtn && state.calls?.[0]) {
-      const id = state.calls[0].id, act = callBtn.dataset.call;
+      const id = callBtn.dataset.cid || state.calls[0].id, act = callBtn.dataset.call; // the call shown in the pill, not just the first one
+      if (act === 'hangup') {
+        api.invoke('calls:hangup', id).then((r) => {
+          if (r?.confirm) flashBelow({ icon: '📞', title: 'Подтверди выход в окне звонка', ms: 2600 });
+          else if (!r?.ok) flashBelow({ icon: '📞', title: 'Не нашёл кнопку — открыл звонок', ms: 2600 });
+        });
+        return;
+      }
       api.invoke(act === 'mic' ? 'calls:mic' : act === 'sound' ? 'calls:sound' : 'calls:focus', id);
       return;
     }
@@ -1145,6 +1254,7 @@ async function boot() {
     else if (view === 'toast') {
       const t = currentToast;
       if (t?.kind === 'agent' || t?.kind === 'reminder') expand('home');
+      else if (t?.kind === 'telegram' && state.settings.tgui?.openOnClick !== false) bus.emit('tg-open', t.tgPeer); // open that chat to answer
       nextToast();
     }
   }

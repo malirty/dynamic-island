@@ -94,6 +94,27 @@ public static class IslandNative {
         for (int i = vks.Length - 1; i >= 0; i--) keybd_event((byte)vks[i], 0, 2, UIntPtr.Zero);
     }
 
+    delegate bool EnumProc(IntPtr h, IntPtr l);
+    [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc cb, IntPtr l);
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+    // Visible top-level windows of a program: "hwnd|title" (a browser shows its tab's title there)
+    public static string[] WindowTitles(string name) {
+        HashSet<uint> pids = new HashSet<uint>();
+        foreach (Process p in Process.GetProcessesByName(name)) pids.Add((uint)p.Id);
+        List<string> res = new List<string>();
+        if (pids.Count == 0) return res.ToArray();
+        EnumWindows(delegate (IntPtr h, IntPtr l) {
+            if (!IsWindowVisible(h)) return true;
+            uint pid; GetWindowThreadProcessId(h, out pid);
+            if (!pids.Contains(pid)) return true;
+            StringBuilder t = new StringBuilder(512); GetWindowText(h, t, 512);
+            StringBuilder k = new StringBuilder(256); GetClassName(h, k, 256);
+            if (t.Length > 0) res.Add(h.ToInt64() + "|" + k.ToString() + "|" + t.ToString());
+            return true;
+        }, IntPtr.Zero);
+        return res.ToArray();
+    }
+
     public static bool FocusProcess(string name) {
         foreach (Process p in Process.GetProcessesByName(name)) {
             if (p.MainWindowHandle != IntPtr.Zero) return Focus(p.MainWindowHandle.ToInt64());
@@ -179,6 +200,11 @@ public static class IslandAudio {
         [PreserveSig] int GetMute([MarshalAs(UnmanagedType.Bool)] out bool m);
     }
 
+    [Guid("C02216F6-8C67-4B5B-9D00-D008E73E0064"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IAudioMeterInformation {
+        [PreserveSig] int GetPeakValue(out float p);
+    }
+
     static IMMDevice Speakers() {
         IMMDeviceEnumerator en = (IMMDeviceEnumerator)(new MMDeviceEnumeratorCo());
         IMMDevice dev; Marshal.ThrowExceptionForHR(en.GetDefaultAudioEndpoint(0, 1, out dev));
@@ -211,6 +237,31 @@ public static class IslandAudio {
             ISimpleAudioVolume vol = (ISimpleAudioVolume)s;
             float v; vol.GetMasterVolume(out v); bool m; vol.GetMute(out m);
             res.Add(pid + "|" + name + "|" + v.ToString(System.Globalization.CultureInfo.InvariantCulture) + "|" + (m ? 1 : 0));
+        }
+        return res.ToArray();
+    }
+
+    // Apps making sound right now (any player, game or messenger, even without media controls).
+    // Each entry: pid|process|peak
+    public static string[] Loud() {
+        List<string> res = new List<string>();
+        Guid iid = typeof(IAudioSessionManager2).GUID; object o;
+        Marshal.ThrowExceptionForHR(Speakers().Activate(ref iid, 23, IntPtr.Zero, out o));
+        IAudioSessionManager2 mgr = (IAudioSessionManager2)o;
+        IAudioSessionEnumerator en; mgr.GetSessionEnumerator(out en);
+        int n; en.GetCount(out n);
+        for (int i = 0; i < n; i++) {
+            IAudioSessionControl2 s; en.GetSession(i, out s);
+            int st; s.GetState(out st);
+            if (st != 1) continue; // only active sessions
+            uint pid; s.GetProcessId(out pid);
+            if (pid == 0) continue; // system sounds
+            float peak = 0;
+            try { ((IAudioMeterInformation)s).GetPeakValue(out peak); } catch { }
+            if (peak < 0.003f) continue;
+            string name = "";
+            try { name = Process.GetProcessById((int)pid).ProcessName; } catch { }
+            res.Add(pid + "|" + name + "|" + peak.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
         return res.ToArray();
     }
@@ -397,23 +448,26 @@ function Get-MediaSession {
 function Cmd-Media($a) {
     $s = Get-MediaSession
     if (-not $s) { return @{ active = $false } }
-    $p = AwaitT ($s.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties]) 3000
-    if (-not $p) { return @{ stale = $true } }
+    # Telegram voice messages carry no title anyway: don't wait long for their description,
+    # report the session right away (waiting here delayed the island by several seconds)
+    $isTg = $s.SourceAppUserModelId -like '*Telegram*'
+    $p = AwaitT ($s.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties]) $(if ($isTg) { 600 } else { 3000 })
+    if (-not $p -and -not $isTg) { return @{ stale = $true } }
     $pb = $s.GetPlaybackInfo()
     $tl = $s.GetTimelineProperties()
     $r = @{
         active   = $true
         app      = $s.SourceAppUserModelId
-        title    = $p.Title
-        artist   = $p.Artist
-        album    = $p.AlbumTitle
+        title    = $(if ($p) { $p.Title } else { '' })
+        artist   = $(if ($p) { $p.Artist } else { '' })
+        album    = $(if ($p) { $p.AlbumTitle } else { '' })
         status   = [string]$pb.PlaybackStatus
         position = $tl.Position.TotalSeconds
         duration = $tl.EndTime.TotalSeconds
         updated  = $tl.LastUpdatedTime.ToUnixTimeMilliseconds()
         canSeek  = $pb.Controls.IsPlaybackPositionEnabled
     }
-    if ($a.thumb -and $p.Thumbnail) {
+    if ($a.thumb -and $p -and $p.Thumbnail) {
         try {
             # PowerShell can't bind AsStreamForRead() to a WinRT COM object directly,
             # so invoke it through reflection.
@@ -432,13 +486,23 @@ function Cmd-Media($a) {
 }
 
 function Cmd-MediaCmd($a) {
-    $s = Get-MediaSession
+    # control the very player the island shows (by its app id); otherwise the usual pick
+    $s = $null
+    if ($a.app) { $s = (Get-MediaManager).GetSessions() | Where-Object { $_.SourceAppUserModelId -eq $a.app } | Select-Object -First 1 }
+    if (-not $s) { $s = Get-MediaSession }
     if (-not $s) {
         $vk = @{ toggle = 0xB3; play = 0xB3; pause = 0xB3; next = 0xB0; prev = 0xB1 }[$a.action]
         if ($vk) { [IslandNative]::Combo(@($vk)) }
         return @{ fallback = $true }
     }
-    switch ($a.action) {
+    $action = $a.action
+    # "toggle" becomes an explicit play or pause: some players (Telegram) accept a toggle but ignore it.
+    # The island says what is really going on (it hears the sound); otherwise the player's own status.
+    if ($action -eq 'toggle') {
+        $isPlaying = if ($null -ne $a.playing) { [bool]$a.playing } else { [string]$s.GetPlaybackInfo().PlaybackStatus -eq 'Playing' }
+        $action = if ($isPlaying) { 'pause' } else { 'play' }
+    }
+    switch ($action) {
         'toggle' { $op = $s.TryTogglePlayPauseAsync() }
         'play' { $op = $s.TryPlayAsync() }
         'pause' { $op = $s.TryPauseAsync() }
@@ -446,8 +510,13 @@ function Cmd-MediaCmd($a) {
         'prev' { $op = $s.TrySkipPreviousAsync() }
         'seek' { $op = $s.TryChangePlaybackPositionAsync([long]([double]$a.position * 10000000)) }
     }
+    $before = [string]$s.GetPlaybackInfo().PlaybackStatus
     $res = AwaitT $op ([bool]) 2500
-    @{ ok = [bool]$res; timedOut = ($null -eq $res) }
+    if (-not $res -and $a.action -eq 'toggle') {
+        # the explicit command was refused: fall back to the player's own toggle
+        $res = AwaitT ($s.TryTogglePlayPauseAsync()) ([bool]) 2500
+    }
+    @{ ok = [bool]$res; timedOut = ($null -eq $res); app = $s.SourceAppUserModelId; before = $before; sent = $action }
 }
 
 function Cmd-Ocr($a) {
@@ -557,6 +626,89 @@ function Cmd-MicUsers($a) {
     $out
 }
 
+# ---- controlling call apps ----
+# Press a real button inside an app (UI Automation): the first pattern that matches a button wins.
+# Works in the background (no focus change) for Discord, Telegram, browsers; Zoom draws its own UI.
+$script:uiaReady = $false
+function Cmd-UiaPress($a) {
+    if (-not $script:uiaReady) { Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes; $script:uiaReady = $true }
+    $AE = [System.Windows.Automation.AutomationElement]  # not $A: PowerShell names ignore case, it would overwrite $a
+    $pids = @(Get-Process -Name ([string]$a.proc) -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })
+    if (-not $pids.Count) { return @{ ok = $false; reason = 'no process' } }
+    $roots = @()
+    if ($a.hwnd) { try { $roots += $AE::FromHandle([IntPtr][long]$a.hwnd) } catch { } }
+    if (-not $roots.Count) { $roots = @($AE::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition) | Where-Object { $pids -contains $_.Current.ProcessId }) }
+    $btnCond = New-Object System.Windows.Automation.PropertyCondition($AE::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)
+    $all = @()
+    foreach ($r in $roots) { try { $all += @($r.FindAll([System.Windows.Automation.TreeScope]::Descendants, $btnCond)) } catch { } }
+    foreach ($pat in @($a.names)) {
+        foreach ($b in $all) {
+            $n = [string]$b.Current.Name
+            if (-not $n -or $n -notmatch "(?i)$pat" -or -not $b.Current.IsEnabled) { continue }
+            $ip = $null
+            if ($b.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$ip)) { $ip.Invoke(); return @{ ok = $true; name = $n } }
+            $tp = $null
+            if ($b.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$tp)) { $tp.Toggle(); return @{ ok = $true; name = $n } }
+        }
+    }
+    @{ ok = $false; reason = 'not found'; buttons = $all.Count }
+}
+# Zoom doesn't tell anyone whether you're muted, and its buttons aren't visible to UI Automation.
+# So look at its window (PrintWindow works under other windows too): when the toolbar is shown
+# (its red "Leave" button is at the right end), a red slash on the mic button at the left end = muted.
+$script:zoomPixReady = $false
+function Cmd-ZoomMic($a) {
+    if (-not $script:zoomPixReady) {
+        Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @"
+using System;
+using System.Drawing;
+using System.Runtime.InteropServices;
+public static class ZoomPix {
+    [DllImport("user32.dll")] static extern bool PrintWindow(IntPtr h, IntPtr dc, uint flags);
+    [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out RECT r);
+    [DllImport("user32.dll")] static extern bool IsIconic(IntPtr h);
+    [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L, T, R, B; }
+    public static string State(long hwnd) {
+        if (IsIconic((IntPtr)hwnd)) return "unknown";
+        RECT r; GetWindowRect((IntPtr)hwnd, out r);
+        int w = r.R - r.L, h = r.B - r.T;
+        if (w < 300 || h < 200) return "unknown";
+        using (Bitmap bmp = new Bitmap(w, h)) {
+            using (Graphics g = Graphics.FromImage(bmp)) { IntPtr dc = g.GetHdc(); PrintWindow((IntPtr)hwnd, dc, 2); g.ReleaseHdc(dc); }
+            int y0 = Math.Max(0, h - 76), left = 0, right = 0;
+            int lx = Math.Min(260, w / 4), rx = w - Math.Min(320, w / 4);
+            for (int y = y0; y < h; y++) {
+                for (int x = 0; x < lx; x += 2) { Color c = bmp.GetPixel(x, y); if (c.R > 170 && c.G < 90 && c.B < 90) left++; }
+                for (int x = rx; x < w; x += 2) { Color c = bmp.GetPixel(x, y); if (c.R > 170 && c.G < 90 && c.B < 90) right++; }
+            }
+            if (right < 20) return "unknown"; // toolbar hidden: can't tell
+            return left >= 6 ? "muted" : "on";
+        }
+    }
+}
+"@
+        $script:zoomPixReady = $true
+    }
+    @{ state = [ZoomPix]::State([long]$a.hwnd) }
+}
+
+# Send an app's own shortcut: bring its window forward for a moment, press, give focus back.
+function Cmd-SendKeys($a) {
+    $prev = [IslandNative]::Foreground()
+    $h = [long]$a.hwnd
+    if (-not $h) {
+        $p = Get-Process -Name ([string]$a.proc) -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero } | Select-Object -First 1
+        if ($p) { $h = $p.MainWindowHandle.ToInt64() }
+    }
+    if (-not $h) { return @{ ok = $false; reason = 'no window' } }
+    [void][IslandNative]::Focus($h)
+    Start-Sleep -Milliseconds 180
+    [IslandNative]::Combo([int[]]@($a.vks))
+    Start-Sleep -Milliseconds 150
+    if (-not $a.stay -and $prev[0]) { [void][IslandNative]::Focus([long]$prev[0]) }
+    @{ ok = $true }
+}
+
 function Cmd-StartApps($a) {
     @(Get-StartApps | ForEach-Object { @{ name = $_.Name; id = $_.AppID } })
 }
@@ -573,6 +725,7 @@ function Dispatch($c, $a) {
         'keys' { [IslandNative]::Combo([int[]]$a.vks); return @{ ok = $true } }
         'media' { return Cmd-Media $a }
         'mediaCmd' { return Cmd-MediaCmd $a }
+        'loud' { return @([IslandAudio]::Loud() | ForEach-Object { $p = $_ -split '\|'; @{ pid = [int]$p[0]; name = $p[1]; peak = [double]$p[2] } }) }
         'sessions' { return @([IslandAudio]::Sessions() | ForEach-Object { $p = $_ -split '\|'; @{ pid = [int]$p[0]; name = $p[1]; volume = [double]$p[2]; muted = ($p[3] -eq '1') } }) }
         'setAppVolume' { return @{ count = [IslandAudio]::SetAppVolume([string]$a.match, [float]$a.level) } }
         'volume' { return @{ level = [IslandAudio]::GetMaster(); muted = [IslandAudio]::GetMute() } }
@@ -596,6 +749,10 @@ function Dispatch($c, $a) {
         'setAppMicMute' { $n = [IslandAudio]::AppMicMute([string]$a.match, $(if ($a.on) { 1 } else { 0 })); return @{ count = $n } }
         'setAppMute' { $n = [IslandAudio]::AppMute([string]$a.match, $(if ($a.on) { 1 } else { 0 })); return @{ count = $n } }
         'focusProcess' { return @{ ok = [IslandNative]::FocusProcess([string]$a.name) } }
+        'uiaPress' { return Cmd-UiaPress $a }
+        'zoomMic' { return Cmd-ZoomMic $a }
+        'sendKeys' { return Cmd-SendKeys $a }
+        'windowTitles' { return @([IslandNative]::WindowTitles([string]$a.name) | ForEach-Object { $p = $_.Split([char]'|', 3); @{ hwnd = [long]$p[0]; cls = $p[1]; title = $p[2] } }) }
         'procPath' { $pp = Get-Process -Name ([string]$a.name) -ErrorAction SilentlyContinue | Where-Object { $_.Path } | Select-Object -First 1; return @{ path = $(if ($pp) { $pp.Path } else { '' }) } }
         default { throw "unknown command: $c" }
     }

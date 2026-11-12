@@ -1,4 +1,4 @@
-import { api, bus, state, $, $$, h, esc, icon, mediaIcon, clock, ago, bytes, wmo, saveSettings, glyphTile, setProgress } from '../core.js';
+import { api, bus, state, $, $$, h, esc, icon, mediaIcon, clock, ago, bytes, wmo, saveSettings, glyphTile, setProgress, setPP } from '../core.js';
 import { eyesHTML } from '../characters.js';
 
 export const QUICK = {
@@ -40,7 +40,10 @@ function playerW() {
     </div>
     <div class="lyr"><div class="lyrics"><div class="lines"></div></div></div>`;
   const noplay = h('div', { class: 'noplay', html: `${eyesHTML('np')}<div><div style="font-weight:650;color:var(--fg)">Сейчас ничего не играет</div><div class="small">Включи музыку в любом плеере — остров оживёт</div></div>` });
-  for (const b of $$('[data-c]', w)) b.onclick = () => api.invoke('media:cmd', b.dataset.c);
+  for (const b of $$('[data-c]', w)) b.onclick = () => {
+    if (b.dataset.c === 'toggle') setPP(b, !state.media?.playing, 23, 1500); // show the new state at once
+    api.invoke('media:cmd', b.dataset.c);
+  };
   $('.lyrb', w).onclick = () => { lyricsOn = !lyricsOn; w.classList.toggle('showlyr', lyricsOn); $('.lyrb', w).classList.toggle('on', lyricsOn); ctx.resize(); };
   $('.track', w).onclick = (e) => {
     const m = state.media, r = e.currentTarget.getBoundingClientRect();
@@ -63,6 +66,7 @@ function playerW() {
     if (!active) { if (!noplay.parentNode) w.append(noplay); w.classList.remove('playing'); return; }
     noplay.remove();
     w.classList.toggle('playing', !!m.playing);
+    w.classList.toggle('soundonly', !!m.soundOnly); // an app that only makes sound: just its name and volume
     if (key !== m.key + (m.thumb?.length || 0)) {
       key = m.key + (m.thumb?.length || 0);
       const bg = m.thumb ? `url('${m.thumb}')` : 'none';
@@ -75,7 +79,7 @@ function playerW() {
       api.invoke('media:appVolume').then((v) => { if (v != null) { vol.value = v; vol.oninput(); } });
       renderLyrics();
     }
-    $('[data-c="toggle"]', w).innerHTML = mediaIcon(m.playing ? 'pause' : 'play', 23);
+    setPP($('[data-c="toggle"]', w), m.playing, 23);
     $('.pos', w).textContent = clock(m.position || 0);
     $('.dur', w).textContent = clock(m.duration || 0);
     setProgress($('.track', w), m.duration ? m.position / m.duration : 0);
@@ -187,9 +191,11 @@ function agentsW() {
     }
     for (const s of a.sessions) {
       const ask = a.asks?.find((x) => x.session === s.id);
-      const st = s.state === 'working' ? `<span class="spark">${icon('agent', 14)}</span>` : s.state === 'waiting' ? '❗' : s.state === 'done' ? '✓' : '·';
+      // the agent's logo (Claude / Codex) with a small state badge in the corner
+      const badge = s.state === 'waiting' ? '!' : s.state === 'done' ? '✓' : '';
+      const anim = s.state === 'working' ? ' work' : s.state === 'waiting' ? ' wait' : '';
       w.append(h('div', { class: 'agent' },
-        h('div', { class: 'st ' + s.state, html: st }),
+        h('div', { class: 'alogo' + anim, html: glyphTile({ kind: 'agent', source: s.source }, 28) + (badge ? `<i class="abadge ${s.state}">${badge}</i>` : s.state === 'working' ? '<i class="abadge working"></i>' : '') }),
         h('div', { class: 'grow' }, h('div', { class: 'nm' }, `${s.project}`, h('span', { class: 'muted small', style: 'font-weight:500' }, ` · ${s.source === 'codex' ? 'Codex' : 'Claude'} · ${ago(s.updated)}`)), h('div', { class: 'nt' }, ask ? (ask.kind === 'permission' ? `Разрешить ${ask.data.tool}?` : ask.data.questions?.[0]?.question) : (s.tool ? s.tool + ': ' : '') + (s.note || ''))),
         h('button', { class: 'ibtn', html: icon('close', 12), title: 'Убрать', onclick: () => api.invoke('agents:dismiss', s.id) })));
     }
@@ -238,7 +244,7 @@ function notifsW() {
     w.append(h('div', { class: 'h2', style: 'margin:0 0 6px' }, 'Уведомления', h('span', { class: 'sp' }), state.notifications.length ? h('button', { class: 'btn sm ghost', onclick: () => { state.notifications = []; api.invoke('notifications:clear'); update(); ctx.resize(); } }, 'Очистить') : ''));
     const list = state.notifications.slice(0, 4);
     if (!list.length) w.append(h('div', { class: 'empty' }, state.settings.dnd ? 'Не беспокоить включено' : 'Нет новых уведомлений'));
-    for (const n of list) w.append(h('div', { class: 'notif' },
+    for (const n of list) w.append(h('div', { class: 'notif', style: n.kind === 'telegram' ? 'cursor:pointer' : null, onclick: n.kind === 'telegram' ? () => bus.emit('tg-open', n.tgPeer) : null },
       h('div', { class: 'ap', html: glyphTile(n, 28) }),
       h('div', { class: 'grow' }, h('div', { class: 'small', style: 'font-weight:650' }, n.title || ''), n.body ? h('div', { class: 'muted small', style: 'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden' }, n.body) : '', h('div', { class: 'muted small', style: 'font-size:10.5px' }, `${n.app || ''} · ${ago(n.at)}`))));
   }

@@ -260,7 +260,7 @@ function hideIsland(minutes) {
 }
 function showIsland() {
   clearTimeout(snoozeTimer);
-  if (island && !island.isVisible()) island.showInactive();
+  if (island && !island.isVisible()) { island.showInactive(); setTimeout(() => send('island-shown'), 60); } // it slides back in
 }
 
 function trayIcon() {
@@ -458,10 +458,16 @@ function ipc() {
   // capture
   h('capture:start', (mode) => startCapture(mode));
   h('capture:data', () => pendingCapture);
-  h('capture:cancel', () => { captureWin?.close(); });
+  let tgShotPeer = null;
+  h('capture:cancel', () => { captureWin?.close(); tgShotPeer = null; });
   h('capture:done', async (res) => {
     captureWin?.close();
     const src = { app: 'Скриншот' };
+    if (tgShotPeer) {
+      const peer = tgShotPeer; tgShotPeer = null;
+      if (res.type === 'image') send('tg-shot', { peer, dataUrl: res.dataUrl });
+      return;
+    }
     if (res.type === 'image') {
       const img = nativeImage.createFromDataURL(res.dataUrl);
       services.clips.writeImage(img, src);
@@ -547,18 +553,50 @@ function ipc() {
   h('agents:status', () => services.agents.status());
   h('agents:list', () => services.agents.list());
   h('calls:list', () => services.calls.list());
-  h('calls:mic', (id) => services.calls.toggleMic(id));
+  h('calls:mic', (id) => services.calls.muteInApp(id)); // the app's own mute button / shortcut, else Windows
+  h('calls:hangup', (id) => services.calls.hangup(id));
   h('calls:sound', (id) => services.calls.toggleSound(id));
   h('calls:focus', (id) => services.calls.focus(id));
   h('agents:install', (which) => (which === 'codex' ? services.agents.installCodex() : services.agents.installClaude()));
   h('agents:uninstall', () => services.agents.uninstallClaude());
 
   // telegram
-  let tgAsk = null;
-  services.telegramAsk = (kind, label) => new Promise((resolve) => { tgAsk = resolve; openSettingsWindow('notify'); setTimeout(() => sendAll('telegram-ask', { kind, label }), 800); });
-  h('telegram:answer', (v) => { tgAsk?.(v); tgAsk = null; });
+  // sign in by QR code or phone number; the steps live in telegram.js and are pushed as 'telegram-login'
+  h('telegram:login', (method, phone) => services.telegram.login(method, phone));
+  h('telegram:loginState', () => services.telegram.loginState());
+  h('telegram:answer', (v) => services.telegram.answer(v));
+  h('telegram:cancel', () => services.telegram.cancel());
   h('telegram:start', () => services.telegram.start());
   h('telegram:logout', () => services.telegram.logout());
+  // the mini Telegram on the island
+  h('tg:dialogs', (n) => services.telegram.tg.dialogs(n));
+  h('tg:avatar', (peer) => services.telegram.tg.avatar(peer));
+  h('tg:messages', (peer, n) => services.telegram.tg.messages(peer, n));
+  h('tg:send', (peer, text, replyTo) => services.telegram.tg.send(peer, text, replyTo));
+  h('tg:read', (peer) => services.telegram.tg.read(peer));
+  h('tg:media', (peer, id, thumb) => services.telegram.tg.media(peer, id, thumb));
+  h('tg:listened', (peer, id) => services.telegram.tg.listened(peer, id));
+  h('tg:status', (peer) => services.telegram.tg.status(peer));
+  h('tg:me', () => services.telegram.tg.me());
+  h('tg:react', (peer, id, emoji) => services.telegram.tg.react(peer, id, emoji));
+  h('tg:remove', (peer, ids, revoke) => services.telegram.tg.remove(peer, ids, revoke));
+  h('tg:edit', (peer, id, text) => services.telegram.tg.edit(peer, id, text));
+  h('tg:forward', (from, id, to) => services.telegram.tg.forward(from, id, to));
+  h('tg:transcribe', (peer, id) => services.telegram.tg.transcribe(peer, id));
+  h('tg:translate', (peer, id, lang) => services.telegram.tg.translate(peer, id, lang));
+  h('tg:readDate', (peer, id) => services.telegram.tg.readDate(peer, id));
+  h('tg:save', async (peer, id) => {
+    const f = await services.telegram.tg.download(peer, id);
+    if (!f) return false;
+    const r = await dialog.showSaveDialog({ defaultPath: path.join(app.getPath('downloads'), f.name) });
+    if (r.canceled || !r.filePath) return false;
+    fs.writeFileSync(r.filePath, f.data);
+    return r.filePath;
+  });
+  h('tg:sendFile', (peer, f, caption, replyTo) => services.telegram.tg.sendFile(peer, f, caption, replyTo));
+  h('tg:sendVoice', (peer, data, wave, replyTo) => services.telegram.tg.sendVoice(peer, data, wave, replyTo));
+  // a screenshot straight into a chat: the usual area picker, the picture goes back to the island
+  h('tg:screenshot', (peer) => { tgShotPeer = peer; return startCapture('region'); });
 
   h('notifications:clear', () => { recent.length = 0; });
   h('island:hide', (minutes) => hideIsland(+minutes || 0));
@@ -635,7 +673,7 @@ app.whenReady().then(() => {
   services.clips = createClipboard({ store: S.clips, dataDir, emit: send });
   services.downloads = createDownloads({ getDir: () => S.settings.data.downloadsDir, emit: send });
   services.weather = createWeather({ settings: S.settings, emit: send, notify });
-  services.media = createMedia({ emit: send });
+  services.media = createMedia({ emit: send, onVoiceStart: () => services.telegram?.guessVoice(), callProcs: () => services.calls?.procs() || [], log: (m) => fs.appendFile(path.join(app.getPath('userData'), 'island.log'), `${new Date().toISOString()} ${m}\n`, () => {}) });
   services.ai = createAI({ settings: S.settings });
   services.agents = createAgents({
     settings: S.settings, dataDir, emit: (ch, p) => {
@@ -644,7 +682,10 @@ app.whenReady().then(() => {
       if (ch === 'agent-done') notify({ kind: 'agent', source: p.source, title: `${p.project}: задача готова`, body: p.source === 'codex' ? 'Codex закончил' : 'Claude Code закончил', icon: '✅', done: true });
     },
   });
-  services.telegram = createTelegram({ settings: S.settings, emit: (ch, p) => (ch === 'notification' ? notify(p) : sendAll(ch, p)), ask: (k, l) => services.telegramAsk(k, l) });
+  services.telegram = createTelegram({
+    settings: S.settings, emit: (ch, p) => (ch === 'notification' ? notify(p) : sendAll(ch, p)),
+    onVoice: (v) => services.media.setVoice(v), // who sent the voice message that is playing
+  });
   services.calls = createCalls({ emit: send, notify });
   const toasts = sys.createToastWatcher({ state: S.state, emit: notify, enabled: () => S.settings.data.notifications.windows });
 
@@ -662,7 +703,7 @@ app.whenReady().then(() => {
   services.agents.start();
   toasts.start();
   services.calls.start();
-  if (S.settings.data.notifications.telegram && S.settings.data.telegram.session) services.telegram.start();
+  if (S.settings.data.telegram?.session) services.telegram.start(); // also for voice-message names, even with notifications off
   startPolling();
   applySettings();
   if (process.argv.includes('--debug-shots')) debugShots();

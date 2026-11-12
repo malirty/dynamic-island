@@ -575,8 +575,10 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; line-height: 1.
 
 /* ================= more life ================= */
 /* curious: the cursor comes close -> eyes grow and perk up */
-.curious .eyes { transform: scale(1.14) translateY(-1px); }
-.curious .eye { height: 18px; }
+/* grows smoothly as a whole (a touch taller than wider). It uses "scale", not "transform":
+   characters float with a transform animation, which would cancel it, and the eye height used to
+   jump in one frame - that was the abrupt part */
+.curious .eyes:not(.fxl) { scale: 1.1 1.16; }
 /* boop: poked -> squish */
 .trick-boop .eyes { animation: boop .5s cubic-bezier(.3, 1.6, .5, 1); }
 @keyframes boop { 0% { transform: scale(1.3, .55); } 45% { transform: scale(.85, 1.2); } 100% { transform: scale(1); } }
@@ -829,7 +831,7 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; line-height: 1.
 :is(:root[data-mode="light"] #stage, .mp[data-mode="light"]) :is(.mood-scared .eyes, .eyes.e-scared) { --eye: #64748b; }
 
 /* smoother blending between feelings: the whole face eases into its new pose */
-.eyes:not(.fxl) { transition: transform .45s var(--spring), filter .6s ease, top .35s var(--spring); }
+.eyes:not(.fxl) { transition: transform .45s var(--spring), filter .6s ease, top .35s var(--spring), scale .55s cubic-bezier(.3, .7, .3, 1); }
 
 /* ================= joy, new: a little victory dance + confetti ================= */
 :is(.mood-joy .eyes, .eyes.e-joy) { --eye: #8dffbe; --eyeGlow: rgba(70, 235, 150, .75); animation: joyDance 1.25s cubic-bezier(.3, .6, .4, 1) 1; }
@@ -1121,3 +1123,124 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; line-height: 1.
 @keyframes frogPuff { 50% { transform: scaleX(1.1) scaleY(.95) translateY(1px); } }
 #stage.char-frog.mood-confused .eyes:not(.fxl) .deco i:nth-child(4), .char-frog .eyes.e-confused .deco i:nth-child(4) { transform: rotate(-14deg) translateX(2px); }
 :root[data-mode="light"] .char-frog .deco i:nth-child(1) { box-shadow: inset 0 -2px 3px rgba(0, 0, 0, .22), 0 0 0 1px rgba(10, 60, 25, .45); }
+
+/* the anger mark sits up to the right (not between the halo/ears and the eyes) */
+.fx-vein { top: -11px; margin-left: 9px; }
+
+/* the mini player can be put away (×) and brought back (♪) */
+.v-mini .mini-x { top: 7px; right: 9px; }
+.ms-acts .ms-back { color: var(--fg); background: color-mix(in srgb, var(--fg) 14%, var(--card)); }
+
+/* icons inside buttons never take the press themselves (the button does) */
+:is(.cbtn, .cbtn-s, .mpb, .ibtn, .mini-x) :is(svg, i, span) { pointer-events: none; }
+
+/* sound from an app without media controls: no buttons or timeline, a speaker instead of a cover */
+.v-mini.soundonly .ctl, .v-mini.soundonly .prog { display: none; }
+.v-mini.soundonly .art, .cover.snd { display: grid; place-items: center; color: var(--fg2); }
+.player.soundonly :is(.ctl, .prog) { display: none; }
+
+/* black island (solid, dark): the equalizer bars are white */
+:root[data-mode="dark"][data-tod=""]:is([data-plain=""], [data-plain="black"]) .bars i { background: #fff; box-shadow: 0 0 6px rgba(255, 255, 255, .45); }
+
+/* ---------- on a call: green, listening and nodding along, a handset with sound waves ---------- */
+:is(.mood-call .eyes, .eyes.e-call) { --eye: #4ade80; --eyeGlow: rgba(74, 222, 128, .55); }
+:is(:root[data-mode="light"] #stage, .mp[data-mode="light"]) :is(.mood-call .eyes, .eyes.e-call) { --eye: #16a34a; }
+:is(.mood-call .eyes, .eyes.e-call) .eye { animation: callListen 1.6s ease-in-out infinite; }
+:is(.mood-call .eyes, .eyes.e-call) .eye + .eye { animation-delay: .08s; }
+@keyframes callListen { 0%, 100% { transform: none; } 22% { transform: translateY(1.5px) scaleY(.72); } 45% { transform: translateY(-.5px); } 70% { transform: translateY(1px) scaleY(.85); } }
+.fx-call { right: -15px; top: -9px; color: var(--eye); font-style: normal; }
+.fx-call svg { display: block; animation: callRing 2.4s ease-in-out infinite; }
+.fx-call b { position: absolute; left: 8px; top: -2px; width: 6px; height: 6px; border: 1.5px solid currentColor; border-left-color: transparent; border-bottom-color: transparent; border-radius: 50%; opacity: 0; }
+.fx-call b + b { left: 9px; top: -5px; width: 10px; height: 10px; }
+:is(.mood-call .eyes, .eyes.e-call) .fx-call { opacity: 1; }
+:is(.mood-call .eyes, .eyes.e-call) .fx-call b { animation: callWave 1.3s ease-out infinite; }
+:is(.mood-call .eyes, .eyes.e-call) .fx-call b + b { animation-delay: .35s; }
+@keyframes callWave { 0% { opacity: 0; transform: scale(.6); } 35% { opacity: 1; } 100% { opacity: 0; transform: scale(1.15); } }
+@keyframes callRing { 0%, 100% { transform: rotate(0); } 8% { transform: rotate(-12deg); } 16% { transform: rotate(10deg); } 24% { transform: rotate(0); } }
+/* the face on the open island / in flight doesn't need its own copy (the effects layer has it) */
+:is(.v-open, .traveller) .eyes > .fx .fx-call { display: none; }
+
+/* hang up: red, like a phone */
+.cbtn-s.hang { color: #fff; background: #ff3b30; }
+.cbtn-s.hang:hover { background: #ff5146; }
+
+/* ================= on a call: its own look (not the music dance) =================
+   the island breathes in green like a phone that's connected, rings of signal go out from it,
+   and the call's logo pulses. Music waves and the beat glow stay quiet. */
+#stage.oncall #island::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: -1;
+  box-shadow: 0 0 0 1.5px rgba(52, 199, 89, .55), 0 0 18px -2px rgba(52, 199, 89, .55);
+  animation: callBreath 2.4s ease-in-out infinite;
+}
+#stage.oncall #island::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: -2;
+  border: 1.5px solid rgba(52, 199, 89, .55);
+  animation: callRipple 2.4s cubic-bezier(.2, .7, .3, 1) infinite;
+}
+@keyframes callBreath { 0%, 100% { box-shadow: 0 0 0 1px rgba(52, 199, 89, .25), 0 0 8px -4px rgba(52, 199, 89, .3); } 18% { box-shadow: 0 0 0 1.5px rgba(52, 199, 89, .6), 0 0 16px -4px rgba(52, 199, 89, .5); } 32% { box-shadow: 0 0 0 1px rgba(52, 199, 89, .3), 0 0 9px -4px rgba(52, 199, 89, .3); } 46% { box-shadow: 0 0 0 1.5px rgba(52, 199, 89, .55), 0 0 14px -4px rgba(52, 199, 89, .45); } }
+@keyframes callRipple { 0% { inset: 0; opacity: .8; } 70% { opacity: 0; } 100% { inset: -14px -22px; opacity: 0; } }
+/* the call's logo in the pill: a soft ring like an active line */
+#stage.oncall .callapp .callico { animation: callLogo 1.3s ease-out infinite; } /* works on the logo picture too */
+@keyframes callLogo { 0% { box-shadow: 0 0 0 0 rgba(52, 199, 89, .75); } 100% { box-shadow: 0 0 0 9px rgba(52, 199, 89, 0); } }
+/* hang-up button: a gentle red pulse so it's easy to find */
+#stage.oncall .cbtn-s.hang { animation: hangGlow 2.4s ease-in-out infinite; }
+@keyframes hangGlow { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); } 50% { box-shadow: 0 0 0 4px rgba(255, 59, 48, .18); } }
+@media (prefers-reduced-motion: reduce) { #stage.oncall #island::before, #stage.oncall #island::after, #stage.oncall .callapp .callico { animation: none; } }
+
+/* ================= "where did the mouse go?" =================
+   startled wide eyes toward where it flew off, a search to the left and right (squinting, leaning),
+   a "?" above, then a little shrug and back to normal */
+#stage.trick-lost .eyes:not(.fxl) { animation: lostLean 2.7s ease-in-out !important; }
+#stage.trick-lost .eyes:not(.fxl) .eye { animation: lostLook 2.7s cubic-bezier(.45, 0, .35, 1) !important; }
+@keyframes lostLook {
+  0% { translate: var(--ex, 0px) var(--ey, 0px); }
+  8% { translate: calc(var(--lostDir, 1) * 3px) -1px; height: 19px; }      /* huh?! wide eyes, looks after it */
+  18% { translate: calc(var(--lostDir, 1) * 4px) 0; height: 17px; }
+  30% { translate: calc(var(--lostDir, 1) * -4px) 0; height: 11px; }       /* squints the other way */
+  42% { translate: calc(var(--lostDir, 1) * -4px) 0; height: 11px; }
+  54% { translate: calc(var(--lostDir, 1) * 4px) 0; height: 12px; }        /* back again */
+  62% { translate: calc(var(--lostDir, 1) * 4px) 0; height: 12px; }
+  70% { translate: 0 -1px; height: 16px; }                                 /* looks up... */
+  82% { translate: 0 2px; height: 9px; }                                   /* ...and gives up: a shrug */
+  92% { translate: 0 1px; height: 13px; }
+  100% { translate: var(--ex, 0px) var(--ey, 0px); }
+}
+@keyframes lostLean {
+  0%, 100% { rotate: 0deg; translate: 0 0; }
+  8% { rotate: 0deg; translate: 0 -2px; }
+  24% { rotate: calc(var(--lostDir, 1) * 6deg); translate: calc(var(--lostDir, 1) * 1.5px) 0; }
+  38% { rotate: calc(var(--lostDir, 1) * -7deg); translate: calc(var(--lostDir, 1) * -1.5px) 0; }
+  56% { rotate: calc(var(--lostDir, 1) * 6deg); translate: calc(var(--lostDir, 1) * 1.5px) 0; }
+  70% { rotate: 0deg; translate: 0 -1px; }
+  82% { rotate: 0deg; translate: 0 2px; }
+}
+/* the "?" (the effects layer has one) */
+.trick-lost .fx-q { animation: lostQ 2.7s ease-in-out; }
+@keyframes lostQ {
+  0%, 14% { opacity: 0; transform: scale(.3) rotate(-20deg); }
+  22% { opacity: 1; transform: scale(1.15) rotate(10deg); }
+  30% { transform: scale(1) rotate(-6deg); }
+  44% { transform: scale(1) rotate(10deg) translateY(-1px); }
+  58% { transform: scale(1) rotate(-6deg); }
+  78% { opacity: 1; transform: scale(1) rotate(8deg); }
+  92%, 100% { opacity: 0; transform: scale(.5) rotate(20deg) translateY(-3px); }
+}
+@media (prefers-reduced-motion: reduce) { .trick-lost .eyes:not(.fxl), .trick-lost .eye { animation-duration: .01s; } }
+
+/* ================= hidden from the menu: a sad goodbye =================
+   it droops for a moment, then floats up slowly (not the quick swipe-away) */
+#stage.leaving .v-compact .mid .eyes:not(.fxl) { animation: byeDroop .75s ease-in-out both; }
+@keyframes byeDroop { 0% { translate: 0 0; } 40% { translate: 0 2px; } 100% { translate: 0 1px; } }
+#stage.goodbye #island { transition: top 1s cubic-bezier(.55, 0, .3, 1), opacity .9s ease-in .1s, transform .18s ease-out !important; }
+#stage.goodbye .v-compact .mid .eyes:not(.fxl) { animation: byeLook 1s ease-in-out both; }
+@keyframes byeLook { 0% { translate: 0 1px; rotate: 0deg; } 30% { translate: 0 3px; rotate: -4deg; } 60% { translate: 0 3px; rotate: 4deg; } 100% { translate: 0 4px; rotate: 0deg; } }
+
+/* ================= eyes stay readable on every character, skin and emotion =================
+   a thin contrasting outline (dark on a dark island, light on a light one), so bright eyes
+   don't melt into aurora / holo / sunset glows */
+.eyes:not(.fxl) { filter: drop-shadow(0 0 1px rgba(0, 0, 0, .9)) drop-shadow(0 0 2.6px rgba(0, 0, 0, .5)); }
+:root[data-mode="light"] .eyes:not(.fxl), .mp[data-mode="light"] .eyes:not(.fxl) { filter: drop-shadow(0 0 1px rgba(255, 255, 255, .9)) drop-shadow(0 0 2.6px rgba(255, 255, 255, .5)); }
+/* the ghost's eyes sit on its white sheet: always dark, tinted by the emotion (sad - deep blue,
+   angry - deep red...), instead of the emotion's light colour that vanished on white */
+.char-ghost .eyes:not(.fxl) { --eyeTint: var(--eye); filter: none; }
+.char-ghost .eyes:not(.fxl) .eye { --eye: color-mix(in srgb, var(--eyeTint) 22%, #0d0d1e); --eyeGlow: transparent; }

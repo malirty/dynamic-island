@@ -30,7 +30,7 @@ theme(state.settings);
 api.on('settings', (s) => { for (const k of Object.keys(s)) state.settings[k] = s[k]; theme(state.settings); bus.emit('settings', state.settings); bus.emit('settings-external'); });
 bus.on('settings', () => theme(state.settings));
 api.on('weather', (w) => { state.weather = w; });
-api.on('telegram-ask', (q) => bus.emit('telegram-ask', q));
+api.on('telegram-login', (l) => bus.emit('telegram-login', l));
 api.on('telegram-status', (s) => bus.emit('telegram-status', s));
 
 document.getElementById('close').onclick = () => api.invoke('win:close');

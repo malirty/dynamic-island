@@ -123,6 +123,8 @@ const P = {
   pin: 'M12 17v5M8 3h8l-1 7 3 3H6l3-3z',
   trash: 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',
   copy: 'M9 9h10v11H9zM5 15V4h11',
+  share: 'M14 5l6 6-6 6M20 11H10a6 6 0 0 0-6 6v2',
+  hangup: 'M3 14.5c4.9-4.7 13.1-4.7 18 0l-2.4 2.4a1 1 0 0 1-1.3.1l-2.3-1.6a1 1 0 0 1-.4-.9l.2-1.7a11 11 0 0 0-5.6 0l.2 1.7a1 1 0 0 1-.4.9L6.7 17a1 1 0 0 1-1.3-.1z',
   search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-3.5-3.5',
   mic: 'M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zM5 11a7 7 0 0 0 14 0M12 18v3',
   micoff: 'M15 10V6a3 3 0 0 0-5.7-1.3M9 9v3a3 3 0 0 0 5.1 2.1M5 11a7 7 0 0 0 11.6 5.3M19 11a7 7 0 0 1-.7 3M12 18v3M3 3l18 18',
@@ -157,6 +159,8 @@ const P = {
   check: 'M5 12.5l4.5 4.5L19 7',
   chevron: 'M9 6l6 6-6 6',
   back: 'M15 6l-6 6 6 6',
+  telegram: 'M21 4L3 11.2l6 2.3L11.3 20l3.2-4.2 4.7 3.6zM9 13.5l12-9.5',
+  reply: 'M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5V20',
   edit: 'M4 20h4L19 9l-4-4L4 16zM14 6l4 4',
   folder: 'M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z',
   file: 'M6 3h8l5 5v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM14 3v5h5',
@@ -204,13 +208,18 @@ export function glyphFor(t) {
   const [a, b] = TONES[g[1]];
   return { ic: g[0], bg: `linear-gradient(145deg, ${a}, ${b})`, round: !!g[2] };
 }
+// the AIs' own marks (filled, not line icons): Claude's spark and the OpenAI knot for Codex
+const AI_LOGOS = {
+  claude: (z) => `<svg width="${z}" height="${z}" viewBox="0 0 24 24"><path fill="#fff" stroke="#fff" stroke-width="1" stroke-linejoin="round" d="M12.75 13.82L21.11 13.28L13.23 10.46ZM11.74 13.96L17.83 16.56L13.83 11.28ZM10.80 13.56L15.30 20.16L13.95 12.29ZM10.18 12.75L10.91 19.72L13.54 13.23ZM10.04 11.74L6.27 19.33L12.72 13.83ZM10.44 10.80L5.32 14.70L11.71 13.95ZM11.25 10.18L3.48 10.80L10.77 13.54ZM12.26 10.04L5.70 7.07L10.17 12.72ZM13.20 10.44L8.59 3.56L10.05 11.71ZM13.82 11.25L13.06 4.47L10.46 10.77ZM13.96 12.26L17.42 5.07L11.28 10.17ZM13.56 13.20L19.32 9.04L12.29 10.05Z"/><circle cx="12" cy="12" r="2.6" fill="#fff"/></svg>`,
+  codex: (z) => `<svg width="${z}" height="${z}" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6">${[0, 60, 120, 180, 240, 300].map((r) => `<rect x="9.2" y="3.2" width="5.6" height="10.6" rx="2.8" transform="rotate(${r} 12 12)"/>`).join('')}</svg>`,
+};
 // a small tile: app logo, drawn symbol, or (last resort) the first letter
 export function glyphTile(t, size = 28, cls = 'gtile') {
   const r = Math.round(size * 0.3);
   if (t.thumb) return `<span class="${cls}" style="width:${size}px;height:${size}px;border-radius:${r}px;background:center/cover url('${t.thumb}')"></span>`;
   if (t.logo) return `<span class="${cls} logo" style="width:${size}px;height:${size}px;border-radius:${r}px;background:center/78% no-repeat url('${t.logo}')"></span>`;
   const g = glyphFor(t);
-  if (g) return `<span class="${cls}${g.round ? ' round' : ''}" style="width:${size}px;height:${size}px;border-radius:${g.round ? '50%' : r + 'px'};background:${g.bg};color:#fff">${icon(g.ic, Math.round(size * (g.round ? 0.52 : 0.58)))}</span>`;
+  if (g) return `<span class="${cls}${g.round ? ' round' : ''}" style="width:${size}px;height:${size}px;border-radius:${g.round ? '50%' : r + 'px'};background:${g.bg};color:#fff">${AI_LOGOS[g.ic] ? AI_LOGOS[g.ic](Math.round(size * 0.64)) : icon(g.ic, Math.round(size * (g.round ? 0.52 : 0.58)))}</span>`;
   if (t.color) return `<span class="${cls}" style="width:${size}px;height:${size}px;border-radius:${r}px;background:${t.color}"></span>`;
   const letter = (t.app || t.title || '•').trim()[0] || '•';
   return `<span class="${cls}" style="width:${size}px;height:${size}px;border-radius:${r}px;background:var(--card2);font-weight:800;font-size:${Math.round(size * 0.45)}px">${letter.toUpperCase().replace(/[<>&"']/g, '')}</span>`;
@@ -244,7 +253,7 @@ export function setProgress(track, p) {
   track.style.setProperty('--p', p);
 }
 export const CHARACTERS = [['eyes', 'Глаза'], ['cat', 'Котик'], ['bunny', 'Зайка'], ['robot', 'Робот'], ['ghost', 'Призрак'], ['alien', 'Пришелец'], ['angel', 'Ангел'], ['frog', 'Лягушка'], ['devil', 'Чертёнок'], ['buddies', 'Человечки'], ['none', 'Никого']];
-export const EYE_FX = `<div class="deco"><i></i><i></i><i></i><i></i></div><div class="fx"><i class="fx-load"></i><i class="fx-rings"><b></b><b></b></i><i class="fx-bubbles"><b></b><b></b><b></b></i><i class="fx-q">?</i><i class="fx-sweat"></i><i class="fx-dots3"><b></b><b></b><b></b></i><i class="fx-orbit"><b></b><b></b><b></b></i><i class="fx-dots"><b></b><b></b><b></b></i><i class="fx-bulb"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/></svg></i><i class="fx-bang">!</i><i class="fx-notes"><b>♪</b><b>♫</b><b>♪</b></i><i class="fx-joy"><b>✦</b><b>✦</b><b>✦</b><b>✦</b></i><i class="fx-vein"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M3 9.5c3.5 0 6.5-3 6.5-6.5M14.5 3c0 3.5 3 6.5 6.5 6.5M21 14.5c-3.5 0-6.5 3-6.5 6.5M9.5 21c0-3.5-3-6.5-6.5-6.5"/></svg></i></div>`;
+export const EYE_FX = `<div class="deco"><i></i><i></i><i></i><i></i></div><div class="fx"><i class="fx-load"></i><i class="fx-rings"><b></b><b></b></i><i class="fx-bubbles"><b></b><b></b><b></b></i><i class="fx-q">?</i><i class="fx-sweat"></i><i class="fx-dots3"><b></b><b></b><b></b></i><i class="fx-orbit"><b></b><b></b><b></b></i><i class="fx-dots"><b></b><b></b><b></b></i><i class="fx-bulb"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/></svg></i><i class="fx-bang">!</i><i class="fx-call"><svg viewBox="0 0 24 24" width="9" height="9" fill="currentColor"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg><b></b><b></b></i><i class="fx-notes"><b>♪</b><b>♫</b><b>♪</b></i><i class="fx-joy"><b>✦</b><b>✦</b><b>✦</b><b>✦</b></i><i class="fx-vein"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M3 9.5c3.5 0 6.5-3 6.5-6.5M14.5 3c0 3.5 3 6.5 6.5 6.5M21 14.5c-3.5 0-6.5 3-6.5 6.5M9.5 21c0-3.5-3-6.5-6.5-6.5"/></svg></i></div>`;
 
 export function icon(name, size = 18, cls = '') {
   const d = P[name] || P.spark;
@@ -295,3 +304,16 @@ export function coverColor(src) {
 }
 
 export function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+
+// The play/pause icon is only swapped when it really changes: replacing it every second
+// (the old way) threw away a click that landed at that moment, so the button "sometimes didn't work".
+export function setPP(btn, playing, size, holdMs = 0) {
+  if (!btn) return;
+  const now = performance.now();
+  if (!holdMs && now < (+btn.dataset.hold || 0)) return; // just pressed: wait for the player to catch up
+  if (holdMs) btn.dataset.hold = now + holdMs;
+  const want = playing ? 'pause' : 'play';
+  if (btn.dataset.ic === want) return;
+  btn.dataset.ic = want;
+  btn.innerHTML = mediaIcon(want, size);
+}

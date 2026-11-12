@@ -86,11 +86,11 @@ export function overBubble(p) {
   return false;
 }
 // Clickable strip to the right of the island (generous, the drops move around a bit).
-export function bubblesHitArea(islandRight, top) {
+export function bubblesHitArea(islandRight, top, islandH = 0) {
   const n = order.length;
   if (!n || hidden) return null;
   const s = size();
-  return { x: islandRight, y: 0, width: GAP + n * (s + GAP) + 30, height: top + s + 16 };
+  return { x: islandRight, y: 0, width: GAP + n * (s + GAP) + 30, height: top + Math.max(s, islandH / 2 + s / 2) + 16 };
 }
 
 function kick() { if (!raf) raf = requestAnimationFrame(frame); }
@@ -99,7 +99,7 @@ function frame(now) {
   raf = 0;
   const edge = islandEdge();
   const s = size();
-  const cy = edge.top + Math.min(edge.height, s) / 2;
+  const cy = edge.top + Math.max(edge.height, s) / 2;
   let busy = false;
   let slot = 0;
   for (const key of order) {

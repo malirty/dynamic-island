@@ -5,7 +5,7 @@
 import { state, bus, $$, EYE_FX } from './core.js';
 
 const stage = document.getElementById('stage');
-export const MOODS = ['mood-dance', 'mood-think', 'mood-ponder', 'mood-sad', 'mood-love', 'mood-laugh', 'mood-confused', 'mood-excited', 'mood-bored', 'mood-scared', 'mood-busy', 'mood-idea', 'mood-joy', 'mood-shy', 'mood-startle', 'mood-angry', 'mood-sleepy', 'mood-sleep'];
+export const MOODS = ['mood-call', 'mood-dance', 'mood-think', 'mood-ponder', 'mood-sad', 'mood-love', 'mood-laugh', 'mood-confused', 'mood-excited', 'mood-bored', 'mood-scared', 'mood-busy', 'mood-idea', 'mood-joy', 'mood-shy', 'mood-startle', 'mood-angry', 'mood-sleepy', 'mood-sleep'];
 let temp = null, tempTimer = null;
 let cursor = { x: 0, y: 0 };
 export const flags = { aiThinking: false, agentWorking: false };
@@ -16,6 +16,8 @@ export function eyesHTML(cls = 'main') {
 
 function mood() {
   if (temp) return temp;
+  // on a call (Zoom, Telegram, Discord): listening and talking along - never "asleep" while you talk
+  if (state.calls?.length) return 'mood-call';
   const sleepMin = state.settings?.island?.sleepAfterMin ?? 5;
   const music = state.media?.playing && !state.silent; // playing and actually audible
   const busy = flags.agentWorking || state.downloads?.length > 0;
@@ -28,7 +30,9 @@ function mood() {
   if (flags.aiThinking || flags.agentWorking) return 'mood-ponder'; // an AI is working: deep in thought
   if (busy) return 'mood-busy';
   if (music) return 'mood-dance';
-  return '';
+  // nothing going on: the favourite emotion (Настройки → Остров → Эмоции), or calm
+  const fav = state.settings?.island?.favMood;
+  return fav ? 'mood-' + fav : '';
 }
 
 let lastMood = '', morphT = 0;
@@ -132,7 +136,7 @@ function blinkLoop() {
 // Little idle tricks when nothing is going on: spin, roll, cross-eyed, wink,
 // swap places, jump, look around. Every 25–40 s, only in the calm mood.
 const TRICKS = ['spin', 'roll', 'cross', 'wink', 'swap', 'jump', 'look', 'peek', 'bounce', 'giggle', 'nod', 'squint', 'love'];
-const TRICK_MS = { spin: 1200, roll: 1550, cross: 1350, wink: 800, swap: 1150, jump: 950, look: 1850, peek: 1300, bounce: 1000, giggle: 900, nod: 900, squint: 1100, love: 1900, stretch: 1800, boop: 520, glance: 650, dizzy: 1300, peekdown: 1000, shh: 1250, hop: 560 };
+const TRICK_MS = { spin: 1200, roll: 1550, cross: 1350, wink: 800, swap: 1150, jump: 950, look: 1850, peek: 1300, bounce: 1000, giggle: 900, nod: 900, squint: 1100, love: 1900, stretch: 1800, boop: 520, glance: 650, dizzy: 1300, peekdown: 1000, shh: 1250, hop: 560, lost: 2700 };
 let lastTrick = '';
 export function playTrick(name) {
   const t = name || TRICKS.filter((x) => x !== lastTrick)[Math.floor(Math.random() * (TRICKS.length - 1))];
@@ -157,6 +161,7 @@ export function initCharacters() {
   bus.on('cursor', (p) => { cursor = p; follow(); });
   bus.on('media', applyMood);
   bus.on('silence', applyMood);
+  bus.on('calls', applyMood);
   bus.on('idle', applyMood);
   bus.on('settings', applyMood);
   bus.on('agents', applyMood);
@@ -223,9 +228,8 @@ export function initCharacters() {
   let wasPlaying = false, lastKey = null;
   bus.on('media', (m) => {
     const playing = !!m?.playing;
-    if (playing && !wasPlaying) flashMood('mood-joy', 1300); // play: happy hop
-    else if (!playing && wasPlaying && m?.active) flashMood('mood-sad', 1700); // pause: a little sad
-    else if (playing && lastKey && m.key !== lastKey) playTrick('glance'); // next track: looks over
+    // play / pause no longer flash joy or sadness: it just starts or stops dancing
+    if (playing && wasPlaying && lastKey && m.key !== lastKey) playTrick('glance'); // next track: looks over
     wasPlaying = playing; if (m?.key) lastKey = m.key;
   });
   bus.on('download-done', () => flashMood('mood-excited', 2400));

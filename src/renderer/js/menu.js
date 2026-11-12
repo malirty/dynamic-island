@@ -74,6 +74,7 @@ function render() {
     ...(state.calls || []).flatMap((c) => [
       sw(c.micMuted ? 'micoff' : 'mic', `Микрофон в ${c.name}`, () => !c.micMuted, () => { api.invoke('calls:mic', c.id); c.micMuted = !c.micMuted; }),
       sw(c.soundMuted ? 'mute' : 'volume', `Звук звонка ${c.name}`, () => !c.soundMuted, () => { api.invoke('calls:sound', c.id); c.soundMuted = !c.soundMuted; }),
+      item('hangup', `Отключиться от ${c.name}`, { onClick: () => api.invoke('calls:hangup', c.id), danger: true }),
     ]),
     sep(),
     chips('Тема', [['dark', 'Тёмная'], ['light', 'Светлая']], () => s.theme.mode, (v) => set((x) => (x.theme.mode = v))),
@@ -84,9 +85,9 @@ function render() {
     sw('volume', 'Волны под музыку', () => s.theme.edgeDance !== false, () => set((x) => (x.theme.edgeDance = x.theme.edgeDance === false))),
     sw('belloff', 'Не беспокоить', () => !!s.dnd, () => set((x) => (x.dnd = !x.dnd))),
     sep(),
-    item('eye', 'Скрыть остров', { chevron: true, onEnter: (el) => openSub(el, (box) => {
+    item('eye', 'Скрыть остров', { chevron: true, onClick: () => { close(); host.goodbye(0); }, onEnter: (el) => openSub(el, (box) => {
       box.append(h('div', { class: 'mnote' }, 'Вернуть: иконка в трее или ' + (s.hotkeys.island || 'горячая клавиша')));
-      HIDE.forEach(([min, l]) => box.append(item(min ? 'timer' : 'eye', l, { inSub: true, onClick: () => { close(); api.invoke('island:hide', min); } })));
+      HIDE.forEach(([min, l]) => box.append(item(min ? 'timer' : 'eye', l, { inSub: true, onClick: () => { close(); host.goodbye(min); } })));
     }) }),
     item('settings', 'Настройки', { onClick: () => { close(); api.invoke('settings:open'); } }),
     item('restart', 'Перезапустить', { onClick: () => api.invoke('app:relaunch') }),

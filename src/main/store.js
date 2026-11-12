@@ -29,7 +29,7 @@ const DEFAULT_SETTINGS = {
   tabs: [
     { id: 'home', on: true }, { id: 'clip', on: true }, { id: 'ai', on: true },
     { id: 'text', on: true }, { id: 'notes', on: true }, { id: 'weather', on: true },
-    { id: 'control', on: true }, { id: 'settings', on: true },
+    { id: 'control', on: true }, { id: 'tg', on: true }, { id: 'settings', on: true },
   ],
   home: [
     { id: 'player', on: true }, { id: 'actions', on: true }, { id: 'weather', on: true },
@@ -51,6 +51,8 @@ const DEFAULT_SETTINGS = {
   dnd: false,
   notifications: { windows: true, telegram: false, agentsBypassDnd: true },
   telegram: { apiId: '', apiHash: '', session: '', onlyPrivate: true },
+  // the mini Telegram in the island: its own look, not a copy of Telegram
+  tgui: { accent: '#7c5cff', bubbles: 'round', size: 'm', wallpaper: 'theme', avatars: true, openOnClick: true },
   agents: { port: 47821, token: '' },
 };
 
@@ -94,6 +96,13 @@ module.exports = {
   DEFAULT_SETTINGS,
   init() {
     stores.settings = new Store('settings', DEFAULT_SETTINGS);
+    // new tabs appear for people who already have a saved tab list
+    const tabs = stores.settings.data.tabs;
+    if (Array.isArray(tabs) && !tabs.some((t) => t.id === 'tg')) {
+      const i = tabs.findIndex((t) => t.id === 'settings');
+      tabs.splice(i < 0 ? tabs.length : i, 0, { id: 'tg', on: true });
+      stores.settings.save();
+    }
     stores.clips = new Store('clipboard', { items: [] });
     stores.notes = new Store('notes', { items: [] });
     stores.shelf = new Store('shelf', { items: [] });
