@@ -19,9 +19,6 @@ export function saveSettings() {
 // ---------- DOM helpers ----------
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
-// No active subscription: the island is frozen - the character only watches the cursor,
-// nothing else (music, calls, notifications, petting, tricks) gets a reaction.
-export const frozen = () => !!state.account && state.account.state !== 'active';
 
 export function h(tag, attrs = {}, ...kids) {
   const el = document.createElement(tag);
@@ -327,3 +324,20 @@ export function setPP(btn, playing, size, holdMs = 0) {
   btn.dataset.ic = want;
   btn.innerHTML = mediaIcon(want, size);
 }
+
+// The island's box on screen without asking the browser for it: its size comes from a ResizeObserver
+// (told after each layout, for free) and its place is known - centred, at the top of the window. Asking
+// with getBoundingClientRect every frame made the browser lay the whole page out again mid-frame.
+let islRO = null, islW = 0, islH = 0;
+export function islandRect() {
+  const el = document.getElementById('island');
+  if (!islRO) {
+    islRO = new ResizeObserver((ents) => { const b = ents[0].borderBoxSize?.[0]; islW = b ? b.inlineSize : el.offsetWidth; islH = b ? b.blockSize : el.offsetHeight; });
+    islRO.observe(el);
+  }
+  if (!islW || document.getElementById('stage')?.classList.contains('hidden')) return el.getBoundingClientRect();
+  const left = innerWidth / 2 - islW / 2, top = 7;
+  return { left, top, width: islW, height: islH, right: left + islW, bottom: top + islH, x: left, y: top };
+}
+// true while the island is put away (pulled up, or hidden for a full-screen app): nothing needs to move
+export const away = () => document.getElementById('stage')?.classList.contains('away');

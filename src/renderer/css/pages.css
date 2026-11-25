@@ -764,30 +764,6 @@ select.field option { background: #1a1a22; color: #eee; }
 .emo-row.fav { background: color-mix(in srgb, #ffcc00 7%, transparent); }
 .favtag { margin-left: 6px; font-size: 10.5px; font-weight: 700; color: #ffcc00; }
 
-/* account */
-.accw { display: flex; flex-direction: column; gap: 10px; max-width: 520px; }
-.accw .field { height: 36px; }
-.acchero { padding: 6px 0 4px; }
-.accbig { font-size: 26px; font-weight: 700; letter-spacing: -.5px; background: linear-gradient(90deg, #8b6cff, #22d3ee); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.accprof { display: flex; gap: 12px; align-items: center; }
-.accav { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 18px; color: #fff; background: linear-gradient(145deg, #7c5cff, #22b8e6); flex: none; }
-.accname { font-weight: 700; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.accbadge { padding: 4px 10px; border-radius: 10px; font-size: 12px; font-weight: 700; flex: none; }
-.accbadge.lifetime { background: color-mix(in srgb, #a78bfa 25%, transparent); color: #c4b5fd; }
-.accbadge.month { background: color-mix(in srgb, #34c759 22%, transparent); color: #7ee2a4; }
-.accbadge.trial { background: color-mix(in srgb, #ffcc00 20%, transparent); color: #ffd966; }
-.accbadge.off { background: var(--card2); color: var(--fg2); }
-.acccard { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 14px; background: var(--card); }
-.acccard.warn { box-shadow: inset 0 0 0 1px color-mix(in srgb, #ffcc00 45%, transparent); }
-
-.accbadge.admin { background: color-mix(in srgb, #ff9f0a 24%, transparent); color: #ffc078; }
-.acccard.adm { box-shadow: inset 0 0 0 1px color-mix(in srgb, #ff9f0a 40%, transparent); }
-
-.accid { font: 700 11px/1 "Cascadia Code", Consolas, monospace; padding: 4px 7px; border-radius: 7px; background: var(--card2); color: var(--fg2); transition: background .2s, color .2s, transform .2s var(--spring); }
-.accid:hover { color: var(--fg); transform: translateY(-1px); }
-.accid.copied { background: color-mix(in srgb, var(--ok) 25%, transparent); color: var(--ok); }
-.accid.copied::after { content: " ✓"; }
-
 /* ================= weather header, iPhone style ================= */
 .whero.ios { display: block; min-height: 0; padding: 18px 20px 0; text-align: center; border-radius: 26px; isolation: isolate;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08), 0 14px 40px -22px rgba(0, 0, 0, .7); }

@@ -18,7 +18,7 @@ export const SOUND_EVENTS = [
   ['callEnd', 'Звонок закончился', 'down'],
   ['game', 'Запущена игра', 'levelup'],
   ['timerSet', 'Таймер или напоминание поставлено', 'blip'],
-  ['unlock', 'Подписка активна', 'sparkle'],
+  ['unlock', 'Телефон подключён', 'sparkle'],
   ['close', 'Закрытие острова', 'none'],
   ['hide', 'Остров убран', 'whoosh'],
 ];

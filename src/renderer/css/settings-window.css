@@ -49,9 +49,8 @@ html, body { background: transparent; }
 .srow:hover { transform: translateX(2px); box-shadow: inset 2px 0 0 color-mix(in srgb, var(--glow) 70%, transparent); }
 .srow .sl2 { transition: transform .3s var(--spring); }
 /* groups and cards glow a touch on hover */
-.sgroup, .acccard { transition: border-color .3s, box-shadow .35s, transform .35s var(--spring); }
+.sgroup { transition: border-color .3s, box-shadow .35s, transform .35s var(--spring); }
 .sgroup:hover { border-color: color-mix(in srgb, var(--glow) 30%, var(--line)); box-shadow: 0 10px 30px -22px var(--glow); }
-.acccard:hover { transform: translateY(-1px); box-shadow: 0 10px 30px -24px var(--glow); }
 /* toggles: a springy knob that stretches while pressed */
 .toggle { transition: background .35s ease, box-shadow .35s; cursor: pointer; }
 .toggle::after { transition: transform .45s var(--spring), width .2s ease, left .2s ease !important; }
@@ -114,15 +113,6 @@ input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.3); }
 .snind { height: 40px; }
 .snind::before { content: ''; position: absolute; left: 0; top: 50%; width: 3px; height: 16px; margin-top: -8px; border-radius: 3px; background: var(--glow, #7c5cff); box-shadow: 0 0 10px var(--glow, #7c5cff); }
 .sfoot { display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--line); padding-top: 10px; }
-.sprocard { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 14px; border: 0; text-align: left; color: var(--fg); cursor: pointer; font: inherit;
-  background: linear-gradient(135deg, color-mix(in srgb, var(--glow, #7c5cff) 26%, var(--card2)), var(--card)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glow, #7c5cff) 30%, transparent);
-  transition: transform .3s var(--spring), box-shadow .3s; }
-.sprocard:hover { transform: translateY(-1px); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glow, #7c5cff) 55%, transparent), 0 10px 24px -16px var(--glow, #7c5cff); }
-.sprocard.on { box-shadow: inset 0 0 0 1.5px var(--glow, #7c5cff); }
-.sprocard.warn { background: linear-gradient(135deg, rgba(255, 159, 10, .2), var(--card)); box-shadow: inset 0 0 0 1px rgba(255, 159, 10, .35); }
-.sprocard b { display: block; font-size: 13.5px; font-weight: 650; }
-.sprocard small { display: block; font-size: 11.5px; color: var(--fg2); margin-top: 1px; }
-.sprostar { color: #a78bfa; filter: drop-shadow(0 0 6px #7c5cff); display: grid; }
 .shelp { color: var(--fg2); }
 /* the content: a live preview card on top, then the section */
 .smain { display: flex; flex-direction: column; min-height: 0; padding: 48px 22px 0 30px; }
@@ -249,3 +239,11 @@ input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.3); }
 .chip.on .chk { background: #9d8bff; box-shadow: none; transform: scale(1.05); }
 .chip.on .chk svg { opacity: 1; transform: none; }
 :root[data-mode="light"] .chip.on { background: linear-gradient(135deg, rgba(124, 92, 255, .14), rgba(124, 92, 255, .04)); }
+
+/* ---- performance ---- */
+/* the window's own liquid background holds still: the flowing gradient and the drifting spots
+   repainted the whole window every frame (a big part of the time the window took while just open) */
+.win > .ib .flow, .win > .ib .liquid i { animation-play-state: paused; }
+.liquid i { filter: none; }
+/* the little island previews move only while the cursor is on them */
+.mp.sm:not(:hover) :is(.flow, .liquid i, .skin) { animation-play-state: paused; }

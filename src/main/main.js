@@ -22,7 +22,6 @@ const createAgents = require('./agents');
 const createTelegram = require('./telegram');
 const createCalls = require('./calls');
 const createGames = require('./games');
-const createAccount = require('./account');
 const sys = require('./system');
 
 const RENDERER = path.join(__dirname, '..', 'renderer');
@@ -362,7 +361,7 @@ function ipc() {
   h('init', () => ({
     settings: S.settings.data, clips: S.clips.data.items, notes: S.notes.data.items, shelf: S.shelf.data.items,
     reminders: S.reminders.data.items, weather: services.weather.get(), media: services.media.get(), lyrics: services.media.lyrics(),
-    notifications: recent, agentsInstalled: services.agents.status(), telegram: services.telegram.status(), account: services.account.status(),
+    notifications: recent, agentsInstalled: services.agents.status(), telegram: services.telegram.status(),
     providers: services.ai.PROVIDERS, user: os.userInfo().username, hotkeys: registerHotkeys(),
     winSize: { w: winW(), h: winH() },
   }));
@@ -676,27 +675,6 @@ function ipc() {
 
   h('notifications:clear', () => { recent.length = 0; });
   h('island:hide', (minutes) => hideIsland(+minutes || 0));
-  // account & subscription
-  h('account:get', () => services.account.status());
-  h('account:refresh', () => services.account.refresh());
-  h('account:login', (email, pass) => services.account.login(email, pass));
-  h('account:register', (email, pass, name) => services.account.register(email, pass, name));
-  h('account:logout', () => services.account.logout());
-  h('account:activate', (key) => services.account.activate(key));
-  h('account:name', (name) => services.account.setName(name));
-  h('account:server', (url) => services.account.setServer(url));
-  // the admin panel in its own window, signed in with the island's admin account
-  let adminWin = null;
-  h('account:admin', async () => {
-    const t = await services.account.adminToken();
-    if (adminWin && !adminWin.isDestroyed()) { adminWin.focus(); adminWin.webContents.executeJavaScript(`window.__islandAdmin(${JSON.stringify(t)})`); return true; }
-    adminWin = new BrowserWindow({ icon: APP_ICON, width: 1180, height: 820, title: 'Island — админ-панель', backgroundColor: '#0b0b0f', autoHideMenuBar: true, webPreferences: { contextIsolation: true, sandbox: true } });
-    adminWin.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
-    adminWin.webContents.once('did-finish-load', () => adminWin.webContents.executeJavaScript(`window.__islandAdmin(${JSON.stringify(t)})`));
-    adminWin.loadURL(services.account.server() + '/admin');
-    return true;
-  });
-  h('account:buy', async () => { const r = await services.account.buyLink(); if (r?.url) shell.openExternal(r.url); return r; });
   h('app:quit', () => app.quit());
   h('app:relaunch', () => { app.relaunch(); app.quit(); });
   he('win:close', (e) => BrowserWindow.fromWebContents(e.sender)?.close());
@@ -808,7 +786,6 @@ app.whenReady().then(() => {
     onVoice: (v) => services.media.setVoice(v), // who sent the voice message that is playing
   });
   services.calls = createCalls({ emit: send, notify });
-  services.account = createAccount({ emit: (ch, p) => sendAll(ch, p) }); // profile + subscription
   const toasts = sys.createToastWatcher({ state: S.state, emit: notify, enabled: () => S.settings.data.notifications.windows });
 
   // System audio loopback for the beat-reactive edge.
@@ -825,7 +802,6 @@ app.whenReady().then(() => {
   services.agents.start();
   toasts.start();
   services.calls.start();
-  services.account.start();
   if (S.settings.data.telegram?.session) services.telegram.start(); // also for voice-message names, even with notifications off
   startPolling();
   applySettings();

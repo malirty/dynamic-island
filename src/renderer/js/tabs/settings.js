@@ -350,7 +350,6 @@ function render() {
   const parts = {};
   const add = (id, ...nodes) => (parts[id] ||= []).push(...nodes);
 
-  add('account', accountView());
 
   // appearance
   const colors = h('div', { class: 'row' }, ...s.theme.colors.map((c, i) => {
@@ -615,9 +614,7 @@ const SECTIONS = [
   ['island', 'Остров', 'eye'], ['look', 'Внешний вид', 'palette'], ['layout', 'Вкладки', 'window'], ['home', 'Главная', 'home'], ['actions', 'Центр управления', 'control'],
   ['notify', 'Уведомления', 'bell'], ['phone', 'Телефон', 'phone'], ['tg', 'Мини-Telegram', 'telegram'], ['sounds', 'Звуки и музыка', 'volume'],
   ['ai', 'ИИ', 'ai'], ['weather', 'Погода', 'weather'], ['agents', 'Агенты', 'agent'], ['keys', 'Горячие клавиши', 'grab'], ['app', 'Система', 'folder'],
-  ['account', 'Аккаунт', 'user'],
 ];
-const HIDDEN_IN_NAV = new Set(['account']); // opened from the subscription card at the bottom of the sidebar
 let current = 'look', query = '', navEl, contentEl, searchEl, footEl;
 
 let shownKey = null, shownIdx = 0;
@@ -645,7 +642,6 @@ function layout(parts) {
   if (prevY) { ind.style.transform = prevY; ind.style.height = oldInd.style.height; ind.style.transition = 'none'; }
   navEl.append(ind);
   for (const [id, label, ic] of SECTIONS) {
-    if (HIDDEN_IN_NAV.has(id)) continue;
     navEl.append(h('button', { class: 'sitem' + (id === current && !query ? ' on' : ''), onclick: () => { current = id; query = ''; searchEl.value = ''; render(); contentEl.scrollTop = 0; } },
       h('span', { class: 'icw', html: icon(ic, 16) }), h('span', {}, label)));
   }
@@ -682,81 +678,13 @@ function layout(parts) {
 }
 
 
-// the bottom of the sidebar: the subscription card (opens the account) and help
+// the bottom of the sidebar: help
 function renderFoot() {
   if (!footEl) return;
-  const a = state.account || {};
-  const PLAN = { admin: 'Island · Админ', lifetime: 'Island Pro', month: 'Island Pro', trial: 'Island · пробный' };
-  const sub = a.state === 'active' ? (a.plan === 'admin' || a.plan === 'lifetime' ? 'Навсегда' : `До ${new Date(a.until).toLocaleDateString('ru-RU')}`) : a.state === 'expired' ? 'Подписка закончилась' : a.state === 'signedout' ? 'Войти в аккаунт' : 'Проверяю…';
   footEl.innerHTML = '';
   footEl.append(
-    h('button', { class: 'sprocard' + (current === 'account' && !query ? ' on' : '') + (a.state === 'active' ? '' : ' warn'), onclick: () => { current = 'account'; query = ''; searchEl.value = ''; render(); contentEl.scrollTop = 0; } },
-      h('span', { class: 'sprostar', html: icon('spark', 15) }), h('div', {}, h('b', {}, a.state === 'active' ? PLAN[a.plan] || 'Island Pro' : 'Island'), h('small', {}, sub))),
     h('button', { class: 'sitem shelp', onclick: () => showHint('Справка', 'Наведи на любую настройку — здесь появится, что она меняет, с живым примером. Всё сохраняется сразу. Остров раскрывается кликом или горячей клавишей, Esc сворачивает. Поиск слева ищет по всем разделам.') },
       h('span', { class: 'icw', html: icon('question', 16) }), h('span', {}, 'Справка')));
-}
-// ---------- account & subscription ----------
-let accTab = 'login', accErr = '', accBusy = false, accDraft = { email: '', name: '', key: '' }, buyInfo = null;
-const PLAN_TEXT = { admin: 'Администратор', lifetime: 'Навсегда', month: 'Подписка', trial: 'Пробный период' };
-const dDate = (t) => new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
-function accountView() {
-  const a = state.account || { state: 'signedout' };
-  const box = h('div', { class: 'accw' });
-  const err = accErr ? h('div', { class: 'small', style: 'color:var(--bad)' }, accErr) : '';
-  const run = async (fn) => {
-    if (accBusy) return; accBusy = true; accErr = ''; render();
-    try { await fn(); } catch (e) { accErr = String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''); }
-    accBusy = false; render();
-  };
-  if (a.state === 'signedout') {
-    const email = h('input', { class: 'field', type: 'email', placeholder: 'Почта', value: accDraft.email, autocomplete: 'email' });
-    const pass = h('input', { class: 'field', type: 'password', placeholder: 'Пароль' + (accTab === 'reg' ? ' (от 6 символов)' : ''), autocomplete: accTab === 'reg' ? 'new-password' : 'current-password' });
-    const name = h('input', { class: 'field', placeholder: 'Как тебя называть (необязательно)', value: accDraft.name });
-    email.oninput = () => (accDraft.email = email.value); name.oninput = () => (accDraft.name = name.value);
-    const go = () => run(() => (accTab === 'reg' ? api.invoke('account:register', email.value, pass.value, name.value) : api.invoke('account:login', email.value, pass.value)));
-    for (const i of [email, pass, name]) i.onkeydown = (e) => { if (e.key === 'Enter') go(); };
-    box.append(
-      h('div', { class: 'acchero' }, h('div', { class: 'accbig' }, 'Island'), h('div', { class: 'muted small' }, accTab === 'reg' ? '7 дней бесплатно, потом — подписка на месяц или навсегда.' : 'Войди, чтобы пользоваться островом.')),
-      h('div', { class: 'seg', style: 'align-self:flex-start' }, h('button', { class: accTab === 'login' ? 'on' : '', onclick: () => { accTab = 'login'; accErr = ''; render(); } }, 'Вход'), h('button', { class: accTab === 'reg' ? 'on' : '', onclick: () => { accTab = 'reg'; accErr = ''; render(); } }, 'Регистрация')),
-      email, pass, accTab === 'reg' ? name : '',
-      h('button', { class: 'btn pri', disabled: accBusy, onclick: go }, accBusy ? 'Подожди…' : accTab === 'reg' ? 'Создать аккаунт' : 'Войти'), err,
-      serverRow(a));
-    return box;
-  }
-  // signed in: the profile
-  const initials = (a.name || a.email || '?').split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
-  const st = a.state;
-  const badge = st === 'active' ? h('span', { class: 'accbadge ' + a.plan }, PLAN_TEXT[a.plan] || 'Активна') : st === 'expired' ? h('span', { class: 'accbadge off' }, 'Закончилась') : h('span', { class: 'accbadge off' }, a.offline ? 'Нет связи с сервером' : 'Проверяю…');
-  const until = st === 'active' ? (a.plan === 'admin' ? 'Ты администратор — остров работает всегда, без подписки.' : a.plan === 'lifetime' ? 'Подписка навсегда — спасибо!' : `${a.plan === 'trial' ? 'Пробный период' : 'Подписка'} до ${dDate(a.until)} (осталось ${Math.max(0, Math.ceil((a.until - Date.now()) / 864e5))} дн.)`)
-    : st === 'expired' ? 'Подписка закончилась — остров заблокирован, пока ты её не продлишь.' : st === 'stale' ? 'Остров давно не связывался с сервером подписки — подключись к интернету.' : 'Связываюсь с сервером подписки…';
-  const key = h('input', { class: 'field', placeholder: 'ISL-XXXX-XXXX-XXXX', value: accDraft.key, style: 'flex:1;font-family:Cascadia Code,Consolas,monospace;text-transform:uppercase' });
-  key.oninput = () => (accDraft.key = key.value);
-  const activate = () => run(async () => { await api.invoke('account:activate', key.value); accDraft.key = ''; ctx?.flash?.({ icon: '✅', title: 'Ключ активирован', ms: 2000 }); });
-  key.onkeydown = (e) => { if (e.key === 'Enter') activate(); };
-  const nameIn = h('input', { class: 'field', value: a.name || '', placeholder: 'Имя', style: 'flex:1' });
-  box.append(
-    h('div', { class: 'accprof' }, h('div', { class: 'accav' }, initials), h('div', { class: 'grow', style: 'min-width:0' }, h('div', { class: 'accname' }, a.name || a.email),
-      h('div', { class: 'row', style: 'gap:8px' }, a.name ? h('span', { class: 'muted small' }, a.email) : '',
-        a.id != null ? h('button', { class: 'accid', title: 'ID аккаунта — нажми, чтобы скопировать', onclick: (e) => { navigator.clipboard.writeText(String(a.id)); e.currentTarget.classList.add('copied'); const b = e.currentTarget; setTimeout(() => b.classList.remove('copied'), 1200); } }, `ID ${a.id}`) : '')), badge),
-    h('div', { class: 'acccard' + (st === 'active' ? '' : ' warn') }, h('div', {}, until), a.offline && st === 'active' ? h('div', { class: 'muted small' }, 'Сейчас нет связи с сервером — подписка работает по сохранённой лицензии до 3 дней.') : ''),
-    a.admin ? h('div', { class: 'acccard adm' }, h('div', { style: 'font-weight:650' }, 'Админ-панель'),
-      h('div', { class: 'muted small' }, 'Пользователи, ключи подписки, оплаты, цены и Telegram-бот.'),
-      h('button', { class: 'btn pri', style: 'align-self:flex-start', onclick: () => run(() => api.invoke('account:admin')) }, 'Открыть админ-панель')) : '',
-    !['lifetime', 'admin'].includes(a.plan) || st !== 'active' ? h('div', { class: 'acccard' },
-      h('div', { style: 'font-weight:650' }, st === 'active' && a.plan === 'month' ? 'Продлить или купить навсегда' : 'Купить подписку'),
-      h('div', { class: 'muted small' }, buyInfo ? `Месяц — ${buyInfo.priceMonth} ⭐, навсегда — ${buyInfo.priceLifetime} ⭐. Оплата звёздами в Telegram, подписка включится сама.` : 'Оплата звёздами Telegram в нашем боте — после оплаты подписка включится в острове сама.'),
-      h('button', { class: 'btn pri', style: 'align-self:flex-start', onclick: () => run(async () => { buyInfo = await api.invoke('account:buy'); }) }, 'Купить в Telegram')) : '',
-    h('div', { class: 'acccard' }, h('div', { style: 'font-weight:650' }, 'Есть ключ?'), h('div', { class: 'row' }, key, h('button', { class: 'btn', onclick: activate }, 'Активировать'))),
-    err,
-    h('div', { class: 'acccard' }, h('div', { style: 'font-weight:650' }, 'Профиль'),
-      h('div', { class: 'row' }, nameIn, h('button', { class: 'btn', onclick: () => run(() => api.invoke('account:name', nameIn.value)) }, 'Сохранить')),
-      h('div', { class: 'row' }, h('button', { class: 'btn ghost', onclick: () => run(() => api.invoke('account:refresh')) }, 'Проверить подписку'), h('div', { class: 'grow' }), h('button', { class: 'btn bad', onclick: () => run(() => api.invoke('account:logout')) }, 'Выйти'))),
-    serverRow(a));
-  return box;
-}
-function serverRow(a) {
-  const inp = h('input', { class: 'field', value: a.server || '', style: 'flex:1;font-size:12px;height:28px' });
-  return h('div', { class: 'row muted small', style: 'margin-top:4px' }, 'Сервер подписки:', inp, h('button', { class: 'btn sm ghost', onclick: () => api.invoke('account:server', inp.value).then(() => api.invoke('account:refresh')) }, 'Сохранить'));
 }
 
 // ---------- Telegram sign in: QR code or phone number ----------
@@ -824,7 +752,7 @@ function renderTg() {
 // Mounts the settings UI into the standalone settings window.
 export function mountSettings(el, c, startSection) {
   root = el; ctx = c;
-  if (startSection) current = startSection;
+  if (startSection && SECTIONS.some(([id]) => id === startSection)) current = startSection;
   searchEl = h('input', { class: 'field ssearch', placeholder: 'Поиск настроек…', spellcheck: 'false' });
   searchEl.oninput = () => { query = searchEl.value.trim(); render(); };
   navEl = h('div', { class: 'snavlist' });
@@ -842,7 +770,6 @@ export function mountSettings(el, c, startSection) {
   showHint('Наведи на настройку', 'Здесь появится, что именно она меняет, с живым примером. Всё применяется сразу.', 'colors');
   render();
   api.invoke('telegram:loginState').then((l) => { state.tgLogin = l; renderTg(); });
-  bus.on('account', () => { if (current === 'account' || state.account?.state !== 'active') render(); });
   bus.on('telegram-login', (l) => { state.tgLogin = l; if (l.step !== 'idle' && current !== 'notify') { current = 'notify'; query = ''; render(); } else renderTg(); });
   bus.on('settings-external', render);
   bus.on('telegram-status', (st) => { state.telegram = st.status; if (st.error) ctx.flash({ icon: '✈️', title: 'Telegram: ' + st.error, ms: 3500 }); renderTg(); });

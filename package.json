@@ -1,13 +1,12 @@
 {
   "name": "dynamic-island-windows",
   "productName": "Island",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Dynamic Island для Windows: живая пилюля сверху экрана с плеером, буфером, ИИ, погодой и центром управления",
   "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "server": "node server",
     "dist": "electron-builder --win nsis --x64"
   },
   "author": "malirty",

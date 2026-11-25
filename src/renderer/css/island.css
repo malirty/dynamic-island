@@ -1249,29 +1249,6 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; line-height: 1.
 .char-ghost .eyes:not(.fxl) { --eyeTint: var(--eye); filter: none; }
 .char-ghost .eyes:not(.fxl) .eye { --eye: color-mix(in srgb, var(--eyeTint) 22%, #0d0d1e); --eyeGlow: transparent; }
 
-/* locked: no subscription */
-.lockic { display: grid; place-items: center; width: 22px; height: 22px; flex: none; aspect-ratio: 1; border-radius: 50%; background: color-mix(in srgb, #ffcc00 22%, transparent); color: #ffcc00; }
-#stage.locked .v-compact { cursor: pointer; }
-
-/* ================= not signed in: it hides behind the pill's bottom edge =================
-   only the top of its head and eyes show over the edge, and the eyes follow the cursor.
-   After signing in it climbs out (.emerge) and lives as usual. */
-#stage:is(.signin, .emerge) .v-compact .mid { clip-path: inset(-40px -60px -4px -60px); } /* the edge: 6px above the pill's bottom, clear of the wavy rim */
-#stage.locked .v-compact .mid { margin-left: 26px; } /* a little further from the "sign in" text */
-#stage.signin .v-compact .mid .eyes:not(.fxl) { translate: 0 13px; transition: translate .7s cubic-bezier(.3, .7, .3, 1); }
-#stage.signin .v-compact .mid .eyes:not(.fxl) .eye { translate: calc(var(--ex, 0px) * 1.5) min(var(--ey, 0px), 0px); } /* follows you sideways and up, never ducks its eyes under the edge */
-/* climbs out: pushes up from behind the edge, a little hop over it, lands and settles */
-#stage.emerge .v-compact .mid .eyes:not(.fxl) { animation: climbOut 1.25s cubic-bezier(.3, .6, .3, 1) both !important; }
-@keyframes climbOut {
-  0% { translate: 0 13px; scale: 1 1; }
-  25% { translate: 0 11px; scale: 1.08 .9; }       /* gathers itself */
-  55% { translate: 0 -6px; scale: .92 1.1; }       /* hop out */
-  75% { translate: 0 1px; scale: 1.1 .88; }        /* lands */
-  88% { translate: 0 -1px; scale: .98 1.03; }
-  100% { translate: 0 0; scale: 1 1; }
-}
-@media (prefers-reduced-motion: reduce) { #stage.emerge .v-compact .mid .eyes:not(.fxl) { animation: none !important; } }
-
 /* the mini player's bar: easy to grab, grows under the finger */
 .v-mini .prog { cursor: pointer; padding: 5px 0; margin: 3px 0 -5px; } /* the whole row grabs the bar */
 .v-mini .prog .track.drag { height: 6px; }
@@ -2199,3 +2176,17 @@ i.fx-msg, .fx-msg { display: none !important; }
 }
 /* a message on the island itself fades out softly too as the island goes back to the pill */
 #island:not([data-view="toast"]) > .v-toast { transition: opacity .42s ease-out, transform .55s var(--spring), filter .45s ease-out; }
+
+/* ---- performance: what can't be seen doesn't move ---- */
+/* the island put away (pulled up / full-screen app): not painted, nothing animates */
+#stage.away #island, #stage.away #bubbles { visibility: hidden; }
+#stage.away *, #stage.away *::before, #stage.away *::after { animation-play-state: paused !important; }
+/* views that aren't shown, and the open island's pages while it is closed */
+#island > .view.gone *, #island > .view.gone { animation-play-state: paused !important; }
+#island:not([data-view="open"]) > .v-open * { animation-play-state: paused !important; }
+/* the liquid colour spots: the radial gradients are soft already - the extra blur was the costliest
+   thing the graphics card did every frame */
+.liquid i { filter: none; }
+/* an attachment's caption ("Фото", "Голосовое · 0:12", a photo's text) stays on its lines - never a letter per line */
+.v-toast.msg .mattach .mlabel { min-width: 60px; overflow-wrap: break-word; word-break: normal; }
+.v-toast.msg .mattach .mlabel.one { white-space: nowrap; }

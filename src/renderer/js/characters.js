@@ -2,7 +2,7 @@
 // dance to music, think while AI answers, get busy while an agent works or a
 // file downloads, cheer on done, startle on news, get angry on errors (or when
 // poked too much), get sleepy and then fall asleep when you're away.
-import { state, bus, $$, EYE_FX, frozen } from './core.js';
+import { state, bus, $$, EYE_FX } from './core.js';
 
 const stage = document.getElementById('stage');
 export const MOODS = ['mood-surprise', 'mood-call', 'mood-game', 'mood-done', 'mood-dance', 'mood-watch', 'mood-think', 'mood-ponder', 'mood-sad', 'mood-love', 'mood-laugh', 'mood-confused', 'mood-excited', 'mood-bored', 'mood-scared', 'mood-busy', 'mood-idea', 'mood-joy', 'mood-shy', 'mood-startle', 'mood-angry', 'mood-sleepy', 'mood-sleep'];
@@ -19,7 +19,6 @@ export function eyesHTML(cls = 'main') {
 }
 
 function mood() {
-  if (frozen()) return ''; // locked: calm, no matter what is going on
   if (temp) return temp;
   // on a call (Zoom, Telegram, Discord): listening and talking along - never "asleep" while you talk
   if (state.calls?.length) return 'mood-call';
@@ -168,7 +167,6 @@ export function morphFace(change) {
 // a short-lived emotion over the current one (petted while thinking -> shy -> back to thinking);
 // the face blends both ways because every change goes through applyMood
 export function flashMood(name, ms = 2200) {
-  if (frozen()) return;
   if (state.settings?.dnd && (name === 'mood-startle' || name === 'mood-angry')) return;
   temp = name;
   clearTimeout(tempTimer);
@@ -188,7 +186,12 @@ function follow() {
   // One offset per pair (from the pair's center), so both eyes move identically
   // and render at the same size. All positions are read first, then all offsets written:
   // a read after a write forces the browser to restyle the whole island on the spot.
-  const pairs = $$('.eyes').filter((x) => !x.dataset.look).map((pair) => [pair, pair.getBoundingClientRect()]);
+  // (only the faces that can be seen: not those in views that have faded out, nor in the closed
+  // island's pages, nor anything while the island is put away)
+  if (stage.classList.contains('away')) return;
+  const isl = document.getElementById('island');
+  const shut = isl && isl.dataset.view !== 'open';
+  const pairs = $$('.eyes').filter((x) => !x.dataset.look && !x.closest('.view.gone') && !(shut && x.closest('.v-open'))).map((pair) => [pair, pair.getBoundingClientRect()]);
   for (const [pair, r] of pairs) {
     if (!r.width) continue;
     const dx = cursor.x - (r.left + r.width / 2), dy = cursor.y - (r.top + r.height / 2);
@@ -228,7 +231,6 @@ const TENDER = new Set(['love', 'giggle']);
 const HARSH = /mood-(angry|sad|scared|startle|confused|bored)\b/;
 const clashes = (trick, m) => TENDER.has(trick) && HARSH.test(m || '');
 export function playTrick(name) {
-  if (frozen()) return;
   if (ASLEEP.test(lastMood || '') && !POKES.has(name)) return;
   if (stage.classList.contains('petting') && name !== 'boop') return; // being petted: he just melts, no tricks
   const pool = TRICKS.filter((x) => x !== lastTrick && !clashes(x, lastMood));

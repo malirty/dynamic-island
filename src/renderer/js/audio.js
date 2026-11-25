@@ -1,5 +1,5 @@
 // System audio (loopback) analyser: drives the dancing edge, bars and buddies.
-import { state, bus, frozen } from './core.js';
+import { state, bus } from './core.js';
 
 const root = document.documentElement;
 let ctx = null, analyser = null, data = null, stream = null;
@@ -98,10 +98,10 @@ function sample(t) {
 
 function loop(t) {
   raf = requestAnimationFrame(loop);
-  const playing = state.media?.playing && !frozen(); // locked: no dancing to music
+  const playing = state.media?.playing;
   if (playing) sample(t);
   else { quietSince = 0; setSilent(false); level *= 0.9; bass *= 0.85; for (let i = 0; i < bands.length; i++) bands[i] *= 0.88; }
-  const dance = state.settings?.theme?.edgeDance !== false && !frozen();
+  const dance = state.settings?.theme?.edgeDance !== false;
   state.level = dance ? level : 0;
   // only the dancing eyes/buddies use these; setting them on :root would
   // restyle the whole island every frame

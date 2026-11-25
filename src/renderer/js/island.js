@@ -544,24 +544,6 @@ function fitMarquee(el) {
     }
   });
 }
-// no active subscription (or not signed in): the island is locked down to the account screen
-const locked = () => state.account && state.account.state !== 'active';
-function openAccount() { if (view !== 'compact') collapse(false); api.invoke('settings:open', 'account'); }
-function applyLock() {
-  stage.classList.toggle('locked', !!locked());
-  stage.classList.toggle('oncall', !!state.calls?.length && !locked());
-  stage.classList.toggle('ongame', !!state.game && !locked());
-  if (locked()) { stage.classList.remove('curious'); isl.style.transform = 'translateX(-50%)'; }
-  applyMood(); // frozen: calm face
-  const wasHiding = stage.classList.contains('signin');
-  stage.classList.toggle('signin', state.account?.state === 'signedout'); // needs to sign in: hides behind the edge
-  if (wasHiding && !stage.classList.contains('signin')) { // signed in: climbs out of hiding
-    stage.classList.add('emerge');
-    setTimeout(() => stage.classList.remove('emerge'), 1300);
-  }
-  if (locked() && ['open', 'palette', 'mini'].includes(view)) setView('compact');
-  renderCompact(true);
-}
 // Change only the sides of the pill and leave its middle (the character) where it is: an element that is
 // taken out of the page and put back restarts every CSS animation on it, so the thinking, dancing, etc.
 // would jump back to their first frame on every switch of activity.
@@ -616,15 +598,6 @@ function renderCompact(force) {
   const kind = a?.kind || 'clock';
   let key = kind, html = '';
   const eyes = eyesHTML('main');
-  if (locked()) {
-    const a = state.account || {};
-    const text = a.state === 'signedout' ? 'Войди в аккаунт' : a.state === 'expired' ? 'Подписка закончилась' : a.state === 'stale' ? 'Нужна проверка подписки' : 'Проверяю подписку…';
-    key = 'lock' + a.state;
-    html = `<div class="side"><span class="lockic">${icon('lock', 14)}</span><span>${text}</span></div><div class="mid">${eyes}</div><div class="side r"><span class="dim">${a.state === 'expired' ? 'Продлить' : 'Island'}</span></div>`;
-    if (el.dataset.key !== key || force) { el.dataset.key = key; setCompactHTML(el, html); }
-    setBubbles([], true);
-    return;
-  }
   if (kind === 'music') {
     const m = state.media;
     key += m.key + m.thumb?.length;
@@ -672,7 +645,7 @@ function renderCompact(force) {
     compactKey = key;
     // another activity takes the pill: the old one melts away while the new one slides in
     const ident = a?.key || kind;
-    const swap = lastIdent !== null && ident !== lastIdent && view === 'compact' && !locked();
+    const swap = lastIdent !== null && ident !== lastIdent && view === 'compact';
     lastIdent = ident;
     let ghost = null;
     if (swap) {
@@ -985,7 +958,6 @@ function renderMiniSummary(el) {
 let lastNoticeAt = 0; // when the last notification came in (its app may grab the focus for a moment)
 function showToast(t) {
   lastNoticeAt = performance.now();
-  if (locked()) return; // locked: nothing pops up
   if (t.icon === '⚠️') { flashMood('mood-angry', 2600); playSound('error'); } // errors make the island angry (and red)
   // a message from the chat that is on screen right now updates that bubble instead of queueing another
   const key = isMessage(t) && (t.tgPeer || `${t.app}|${t.title}`);
@@ -1039,7 +1011,7 @@ function attachBubble(t, bump) {
   const dur = (kind === 'voice' || kind === 'round') && t.duration ? ' · ' + mmss(t.duration) : '';
   const caption = t.body ? esc(t.body) : `${word}${dur}`;
   const pic = /^(photo|video|gif|sticker|round)$/.test(kind) ? `<span class="mpic${kind === 'round' ? ' round' : ''}${kind === 'sticker' ? ' st' : ''}">${kind === 'video' || kind === 'gif' || kind === 'round' ? `<i>${icon('play', 12)}</i>` : ''}</span>` : `<span class="mic">${icon(ic, 14)}</span>`;
-  return `<div class="mbub mattach${bump ? ' bump' : ''}">${pic}<span class="mlabel">${caption}</span></div>`;
+  return `<div class="mbub mattach${bump ? ' bump' : ''}">${pic}<span class="mlabel${t.body ? '' : ' one'}">${caption}</span></div>`; // a bare label ("Фото", "Голосовое · 0:14") on one line
 }
 // the small preview arrives a moment later; the banner already has its place
 async function loadAttachThumb(t) {
@@ -1198,7 +1170,9 @@ function fitToast(tries = 8) {
       const kids = [...head.children].filter((k) => k.offsetWidth || k === nm);
       const gap = parseFloat(getComputedStyle(head).columnGap) || 0;
       const headNeed = kids.reduce((sum, k) => sum + (k === nm ? nm.scrollWidth : k.offsetWidth), 0) + gap * Math.max(0, kids.length - 1) + 4;
-      t.fit = Math.ceil(Math.max(headNeed, bub ? bub.offsetWidth : 0));
+      // an attachment keeps the width worked out for it: read back from the layout, its caption (already
+      // wrapped in a too-narrow column) gave a smaller width each time, down to a letter per line
+      t.fit = Math.ceil(Math.max(headNeed, t.attachFit || 0, bub ? (t.attachFit ? bub.scrollWidth : bub.offsetWidth) : 0));
     }
   }
   const w = Math.round(Math.max(isMessage(t) ? 250 : 340, Math.min(t.maxw || 640, t.box.w + (t.fit - tb.offsetWidth))));
@@ -1341,6 +1315,7 @@ function renderToast(t, bump) {
       const label = $('.mlabel', ab)?.textContent || '';
       const tw = textWidth(label, fontOf(ab)) + (pic ? 74 + 10 : 22) + 30;
       t.fit = Math.max(head, Math.min(640 - chrome, tw));
+      t.attachFit = t.fit; // its own width, worked out from the text (not read back from a squeezed layout)
       t.box = { w: Math.round(Math.max(340, Math.min(640, chrome + t.fit))), h: pic ? 112 : 84 };
       return;
     }
@@ -1539,7 +1514,6 @@ document.addEventListener('transitionrun', (e) => { if (e.target.closest?.('.tab
 let pageObserver = null;
 export function openTab(id) {
   if (!TABS[id]) return;
-  if (locked() && id !== 'settings') { openAccount(); return; } // locked: only the account
   if (TABS[id].external) { collapse(false); api.invoke('settings:open'); return; } // settings live in their own window
   const order = state.settings.tabs.filter((t) => t.on).map((t) => t.id);
   const dir = order.indexOf(id) >= order.indexOf(activeTab) ? 1 : -1;
@@ -1706,10 +1680,10 @@ function onCursor(p) {
   state.near = near;
   // a little gap between "on" and "off" so it doesn't flicker at the edge
   const wasCurious = stage.classList.contains('curious');
-  stage.classList.toggle('curious', !locked() && state.settings.island.cursorReactions !== false && near > (wasCurious ? 0.28 : 0.42) && !inside && (view === 'compact' || view === 'mini'));
+  stage.classList.toggle('curious', state.settings.island.cursorReactions !== false && near > (wasCurious ? 0.28 : 0.42) && !inside && (view === 'compact' || view === 'mini'));
   const small = view === 'compact' || view === 'mini' || view === 'toast';
   let tx = 0, ty = 0, rx = 0, ry = 0, sc = 1;
-  if (state.settings?.theme?.reactive && small && !onBubble && !locked() && !isl.classList.contains('stretching')) {
+  if (state.settings?.theme?.reactive && small && !onBubble && !isl.classList.contains('stretching')) {
     const k = near * near;
     tx = Math.max(-6, Math.min(6, dx * 0.02 * k));
     ty = Math.max(0, Math.min(4, dy * 0.02 * k));
@@ -1731,7 +1705,6 @@ function onCursor(p) {
 // screen): it looks around for it, a "?" pops up, then it shrugs. At most every 20 s.
 let lostNearT = 0, lostNearX = 0, lostLast = -1e9, lostPrev = null;
 function lostCheck(p, near, dx) {
-  if (locked()) return;
   const now = performance.now();
   if (near > 0.45) { lostNearT = now; lostNearX = dx; }
   const jump = lostPrev ? Math.hypot(p.x - lostPrev.x, p.y - lostPrev.y) : 0;
@@ -1997,7 +1970,6 @@ function trackPet(p, now) {
   }
 }
 function trackPlay(p, inside) {
-  if (locked()) return; // no petting / tickling while locked
   const now = performance.now();
   if (state.settings.island.cursorReactions !== false && inside) trackPet(p, now);
   if (state.settings.island.cursorReactions !== false && inside && !islandHover && lastP && now - lastShy > 6000) {
@@ -2027,7 +1999,6 @@ setInterval(() => {
   if (!islandHover || view !== 'compact' || hideForFullscreen) return;
   if (pressing) { restT = performance.now(); return; } // held, not resting: no mini island popping up under the finger
   const restFor = restAt ? performance.now() - restT : 0;
-  if (restAt && locked()) { restAt = null; return; }
   if (restAt && restFor >= (state.settings.island.miniDelay ?? 1.5) * 1000) {
     const under = document.elementFromPoint(restAt.x, restAt.y);
     if (under?.closest('button, [data-call], [data-media], [data-fold], a')) { restT = performance.now(); return; } // on a button: stay as is
@@ -2131,9 +2102,9 @@ function wire() {
     buildTabs();
   });
   let topClip;
-  api.on('clips', (c) => { const id = c?.[0]?.id ?? c?.[0]?.at; if (topClip !== undefined && id !== undefined && id !== topClip && !locked()) playSound('clip'); topClip = id ?? null; state.clips = c; bus.emit('clips', c); });
+  api.on('clips', (c) => { const id = c?.[0]?.id ?? c?.[0]?.at; if (topClip !== undefined && id !== undefined && id !== topClip) playSound('clip'); topClip = id ?? null; state.clips = c; bus.emit('clips', c); });
   api.on('shelf', (s) => { state.shelf = s; bus.emit('shelf', s); });
-  api.on('reminders', (r) => { const live = (l) => (l || []).filter((x) => !x.done).length; if (live(r) > live(state.reminders) && !locked()) playSound('timerSet'); state.reminders = r; bus.emit('reminders', r); renderCompact(); });
+  api.on('reminders', (r) => { const live = (l) => (l || []).filter((x) => !x.done).length; if (live(r) > live(state.reminders)) playSound('timerSet'); state.reminders = r; bus.emit('reminders', r); renderCompact(); });
   api.on('weather', (w) => { state.weather = w; bus.emit('weather', w); renderCompact(); });
   api.on('downloads', (d) => {
     const had = state.downloads.length;
@@ -2141,7 +2112,7 @@ function wire() {
     bus.emit('downloads', d);
     if (d.length || had) renderCompact();
   });
-  api.on('download-done', (d) => (bus.emit('download-done', d), !locked() && playSound('download'), showToast({ icon: '✅', thumb: d.icon || undefined, dlDone: true, folder: !!d.folder, app: d.from === 'phone' ? (d.folder ? 'Перенесено с телефона' : 'Файл с телефона') : 'Загрузка завершена', title: d.name, body: `${bytes(d.size)}${d.took > 1500 ? ` · за ${dur(d.took)} · ${bytes(d.avg)}/с` : ''}`, path: d.path, actions: true, ms: 8000 })));
+  api.on('download-done', (d) => (bus.emit('download-done', d), playSound('download'), showToast({ icon: '✅', thumb: d.icon || undefined, dlDone: true, folder: !!d.folder, app: d.from === 'phone' ? (d.folder ? 'Перенесено с телефона' : 'Файл с телефона') : 'Загрузка завершена', title: d.name, body: `${bytes(d.size)}${d.took > 1500 ? ` · за ${dur(d.took)} · ${bytes(d.avg)}/с` : ''}`, path: d.path, actions: true, ms: 8000 })));
   // A paused track or voice message leaves the players after a minute (it comes back as soon as it plays).
   // One that is already paused when the island starts (an old Telegram voice message) is gone at once.
   const STALE_MS = 60e3;
@@ -2197,24 +2168,23 @@ function wire() {
   window.__mediaTest = onMedia; // dev aid: feed a made-up track in tests
   window.__stash = (on) => (on ? stash() : unstash()); // dev aid: hide / bring back the island in tests
   api.on('calls', (c) => {
-    if ((c?.length || 0) < (state.calls?.length || 0) && !locked()) playSound('callEnd'); // a call ended
+    if ((c?.length || 0) < (state.calls?.length || 0)) playSound('callEnd'); // a call ended
     state.calls = c;
-    stage.classList.toggle('oncall', !!c?.length && !locked()); // its own animation, not the music one
+    stage.classList.toggle('oncall', !!c?.length); // its own animation, not the music one
     bus.emit('calls', c);
     bus.emit('calls', c);
     renderCompact(true);
   });
   api.on('game', (g) => {
-    if (g && (!state.game || state.game.id !== g.id) && !locked() && Date.now() - g.since < 5 * 60e3) playSound('game'); // just launched
+    if (g && (!state.game || state.game.id !== g.id) && Date.now() - g.since < 5 * 60e3) playSound('game'); // just launched
     state.game = g;
     setGameBadge(g);
-    stage.classList.toggle('ongame', !!g && !locked()); // its own look: not the music dance
+    stage.classList.toggle('ongame', !!g); // its own look: not the music dance
     bus.emit('game', g);
     renderCompact(true);
   });
   // Caps Lock / Num Lock switched: a quick note on the island, like on a laptop's screen
   api.on('lock-key', ({ key, on }) => {
-    if (locked()) return;
     playSound('timerSet');
     const name = key === 'caps' ? 'Caps Lock' : 'Num Lock';
     const t = { kind: 'lock', on, title: `${name} ${on ? 'включён' : 'выключен'}`, body: key === 'caps' ? (on ? 'ПИШЕШЬ ЗАГЛАВНЫМИ' : 'обычные буквы') : (on ? 'цифры на боковой клавиатуре' : 'стрелки на боковой клавиатуре'), ms: 1600 };
@@ -2225,18 +2195,17 @@ function wire() {
   // the phone plugged in by cable: show it and offer to bring the new photos over
   api.on('phone-usb', (list) => { state.phones = list; bus.emit('phone-usb', list); });
   api.on('phone-connected', ({ name }) => {
-    if (locked() || state.settings.phone?.askOnConnect === false) return;
+    if (state.settings.phone?.askOnConnect === false) return;
     playSound('unlock');
     flashMood('mood-joy', 1600);
     showToast({ kind: 'phone', icon: '📱', app: 'Телефон подключён', title: name, body: 'Перенести новые фото и видео?', ms: 12000, actions: true,
       buttons: [{ label: 'Перенести фото', pri: true, ch: 'phone:import', args: [name] }, { label: /iphone|ipad|apple/i.test(name) ? 'Отправить (Telegram)' : 'Отправить файлы', ch: 'phone:send', args: [name] }, { label: 'Открыть', ch: 'phone:open', args: [name] }] });
   });
-  api.on('phone-disconnected', ({ name }) => { if (!locked()) flashBelow({ kind: 'phone', icon: '📱', title: `${name} отключён`, ms: 1800 }); });
+  api.on('phone-disconnected', ({ name }) => { flashBelow({ kind: 'phone', icon: '📱', title: `${name} отключён`, ms: 1800 }); });
   api.on('lyrics', (l) => { state.lyrics = l; bus.emit('lyrics', l); });
   api.on('notification', (n) => {
     state.notifications.unshift(n);
     state.notifications.length = Math.min(50, state.notifications.length);
-    if (locked()) return; // kept for later, but no sound, toast or reaction while locked
     bus.emit('notification', n);
     if (n.silent) return;
     playSound(n.kind === 'reminder' ? (n.icon === '⏱' ? 'timer' : 'reminder') : n.kind === 'agent' ? (n.done ? 'agentDone' : 'agentAsk') : n.kind === 'call' ? 'call' : isMessage(n) ? 'message' : 'notify');
@@ -2252,7 +2221,7 @@ function wire() {
     renderCompact();
     applyMood();
   });
-  api.on('toast', (t) => { if (locked()) return; playTrick('wink'); if (t.icon !== '⚠️') playSound('capture'); return view === 'open' || view === 'palette' ? flashBelow(t) : showToast(t); });
+  api.on('toast', (t) => { playTrick('wink'); if (t.icon !== '⚠️') playSound('capture'); return view === 'open' || view === 'palette' ? flashBelow(t) : showToast(t); });
   api.on('fg-change', (n) => bus.emit('fg-change', n));
   api.on('ocr-result', (r) => { flashMood('mood-idea', 2200); /* read the text: got it! */ openTab('text'); bus.emit('text-set', r.text); flashBelow({ icon: '🔤', title: r.translated ? 'Переведено и скопировано' : 'Текст скопирован в буфер', ms: 2200 }); });
   api.on('fullscreen', (f) => {
@@ -2262,8 +2231,7 @@ function wire() {
     sendShape();
   });
   api.on('idle', (s) => { state.idle = s; bus.emit('idle', s); });
-  api.on('palette-open', () => { if (locked()) return openAccount(); if (view === 'palette') { collapse(true); return; } setView('palette'); openPalette(); });
-  api.on('account', (a) => { if (a?.state === 'active' && state.account && state.account.state !== 'active') playSound('unlock', { preview: false }); state.account = a; bus.emit('account', a); applyLock(); });
+  api.on('palette-open', () => { if (view === 'palette') { collapse(true); return; } setView('palette'); openPalette(); });
   api.on('theme-toggle', toggleTheme);
   api.on('island-toggle', (force) => { if (view === 'open' && !force) collapse(true); else expand(); });
   api.on('open-tab', (id) => openTab(id));
@@ -2279,12 +2247,10 @@ async function boot() {
   Object.assign(state, {
     settings: init.settings, clips: init.clips, notes: init.notes, shelf: init.shelf, reminders: init.reminders,
     weather: init.weather, media: init.media || { active: false }, lyrics: init.lyrics, notifications: init.notifications || [],
-    providers: init.providers, agentsInstalled: init.agentsInstalled, telegram: init.telegram, hotkeyStatus: init.hotkeys, account: init.account,
+    providers: init.providers, agentsInstalled: init.agentsInstalled, telegram: init.telegram, hotkeyStatus: init.hotkeys,
   });
   WIN.w = init.winSize.w; WIN.h = init.winSize.h;
   api.on('win-size', (z) => { WIN.w = z.w; WIN.h = z.h; sendShape(); });
-  stage.classList.toggle('locked', !!locked()); // no subscription: locked from the very start
-  stage.classList.toggle('signin', state.account?.state === 'signedout');
   applyTheme();
   initCharacters();
   initWater();
@@ -2297,17 +2263,25 @@ async function boot() {
   initDrop();
   initStretch();
   hideIdleViews(view);
+  // put away (pulled up, or hidden for a full-screen app): once it has slid out of sight, everything in
+  // it rests - no animations, no edge drawing, nothing painted - until it comes back
+  let awayT = 0;
+  new MutationObserver(() => {
+    const hid = stage.classList.contains('hidden');
+    if (!hid) { clearTimeout(awayT); awayT = 0; if (stage.classList.contains('away')) stage.classList.remove('away'); return; } // (touching the class when it isn't there would wake this observer again, forever)
+    if (!awayT && !stage.classList.contains('away')) awayT = setTimeout(() => { awayT = 0; if (stage.classList.contains('hidden')) stage.classList.add('away'); }, 700);
+  }).observe(stage, { attributes: true, attributeFilter: ['class'] });
+  if (stage.classList.contains('hidden')) stage.classList.add('away');
   renderCompact(true);
   updateCoverGlow();
   api.invoke('agents:list'); // re-sync pending agent questions after a reload
   api.invoke('calls:list');
-  api.invoke('games:get').then((g) => { if (g) { state.game = g; setGameBadge(g); stage.classList.toggle('ongame', !locked()); bus.emit('game', g); renderCompact(true); } });
+  api.invoke('games:get').then((g) => { if (g) { state.game = g; setGameBadge(g); stage.classList.add('ongame'); bus.emit('game', g); renderCompact(true); } });
   if (state.media?.playing) audioActive(true);
 
   // poking the island many times in a row makes it angry
   let pokes = [];
   isl.addEventListener('pointerdown', (e) => {
-    if (locked()) return; // no reaction to pokes while locked
     lastPoke = performance.now();
     // on the open island only a poke at the face counts (not clicks on buttons and cards)
     if (view !== 'compact' && view !== 'mini') {
@@ -2369,7 +2343,6 @@ async function boot() {
     isl.addEventListener('lostpointercapture', (ev) => { isl.style.transition = ''; isl.style.translate = ''; end(ev); }, { once: true });
   });
   function islandPress(e) {
-    if (locked()) { openAccount(); return; }
     const mb = e.target.closest('[data-media]');
     if (mb) { api.invoke('media:cmd', mb.dataset.media); return; }
     if (e.target.closest('[data-fold]')) { foldActivity(primaryActivity()?.key); return; }

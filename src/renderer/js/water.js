@@ -2,7 +2,7 @@
 // membrane): the cursor pulls the edge toward itself, entering the island sends
 // a ripple around it, and bass beats shake the bottom edge and spread glowing
 // rings below. The same shape clips the island body and is drawn as its glow.
-import { state, bus, frozen } from './core.js';
+import { state, bus, islandRect, away } from './core.js';
 import { getDrops, overBubble } from './bubbles.js';
 
 const isl = document.getElementById('island');
@@ -128,7 +128,7 @@ function geometry() {
 }
 
 function local() {
-  const r = isl.getBoundingClientRect();
+  const r = islandRect(120); // only for where the cursor is: a moment old is fine
   return { x: cursor.x - r.left, y: cursor.y - r.top };
 }
 
@@ -147,7 +147,7 @@ function kick(center, amount, spread) {
 // One fixed 60 fps step (k = 1). Larger steps make the explicit spring
 // integration unstable and the edge turns into a saw tooth.
 function step(now, w, h, first) {
-  const on = state.settings?.theme?.water !== false && !frozen(); // locked: a calm edge
+  const on = state.settings?.theme?.water !== false;
   const p = local();
   const k = 1;
   const isIn = p.x >= 0 && p.x <= w && p.y >= 0 && p.y <= h;
@@ -236,7 +236,7 @@ function drawNecks(w, h, pts) {
   // those produced a thin black spike on the island's edge)
   const list = getDrops().filter((b) => !b.dying && b.r > 6);
   if (!list.length) return;
-  const r = isl.getBoundingClientRect();
+  const r = islandRect(16);
   g.save();
   // the neck is the island's own body stretching out: base + a wash of its colour
   const grad = g.createLinearGradient(w - 10, 0, w + 60, 0);
@@ -424,6 +424,7 @@ function draw(now, dt, w, h, pts) {
 let calmFor = 0;
 const wprof = { n: 0, sim: 0, clip: 0, draw: 0 }; // dev aid: where a frame of the edge goes (window.__water.prof)
 function loop(now) {
+  if (away()) { setTimeout(() => requestAnimationFrame(loop), 300); return; } // put away: the edge rests
   requestAnimationFrame(loop);
   if (document.hidden) return;
   if (now - last < (calmFor > 800 ? 32 : 15.5)) return;

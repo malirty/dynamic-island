@@ -3,7 +3,7 @@
 // neighbour) with a little liquid split, then stays calmly in its spot; only the
 // island's real edge (waves, bulges) nudges it aside, smoothly. When it goes away
 // it melts back into the island. water.js draws the liquid necks between them.
-import { state } from './core.js';
+import { state, islandRect } from './core.js';
 import { edgeBulge } from './water.js';
 
 const isl = document.getElementById('island');
@@ -20,7 +20,7 @@ const size = () => Math.round(38 * (state.settings?.theme?.scale || 1));
 
 let bulgeSm = 0;
 function islandEdge() {
-  const r = isl.getBoundingClientRect();
+  const r = islandRect(16); // one measurement per frame, shared
   const b = Math.max(0, edgeBulge());
   bulgeSm += (b - bulgeSm) * 0.05;
   return { right: r.right + bulgeSm, rawRight: r.right + b, top: r.top, height: r.height };
