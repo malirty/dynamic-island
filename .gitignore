@@ -4,3 +4,9 @@ out/
 *.log
 .DS_Store
 Thumbs.db
+
+# licence server: database, signing key, admin password (never commit)
+server/data/
+
+# the licence server stays private (its code is not published)
+server/

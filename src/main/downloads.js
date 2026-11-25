@@ -55,7 +55,8 @@ module.exports = function createDownloads({ getDir, emit }) {
       }
       if (done) {
         let size = 0; try { size = fs.statSync(done).size; } catch {}
-        emit('download-done', { name: path.basename(done), path: done, size });
+        const took = Math.max(1, now - info.started);
+        emit('download-done', { name: path.basename(done), path: done, size, took, avg: size / (took / 1000) });
       }
     }
     emit('downloads', [...active.values()].map(({ name, size, speed, started }) => ({ name, size, speed, started })));

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- the island's icon: just the character's two black eyes (a thin white rim for dark taskbars) -->
+  <g fill="#000" stroke="#fff" stroke-opacity=".92" stroke-width="2.2" paint-order="stroke">
+    <rect x="5.76" y="6.08" width="6.72" height="19.84" rx="3.36"/>
+    <rect x="19.52" y="6.08" width="6.72" height="19.84" rx="3.36"/>
+  </g>
+</svg>

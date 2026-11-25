@@ -52,7 +52,7 @@ input, textarea, select { font: inherit; color: inherit; }
   position: absolute; top: 7px; left: 50%;
   width: var(--w); height: var(--h); border-radius: var(--r);
   transform: translateX(-50%) translate(var(--tx, 0px), var(--ty, 0px)) scale(var(--sc, 1)) perspective(700px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
-  transition: width .62s var(--spring), height .62s var(--spring), border-radius .5s var(--soft), transform .18s ease-out, top .5s var(--spring), opacity .3s;
+  transition: width .62s var(--spring), height .62s var(--spring), border-radius .5s var(--soft), transform .18s ease-out, top .5s var(--spring), opacity .3s, translate .4s var(--spring);
   isolation: isolate;
   cursor: pointer;
 }
@@ -99,7 +99,7 @@ input, textarea, select { font: inherit; color: inherit; }
 /* ---------------- views ---------------- */
 .view { position: absolute; inset: 0; z-index: 3; opacity: 0; pointer-events: none; transform: scale(.94); filter: blur(6px); transition: opacity .22s, transform .45s var(--spring), filter .3s; border-radius: inherit; }
 #island[data-view="compact"] .v-compact, #island[data-view="mini"] .v-mini, #island[data-view="toast"] .v-toast,
-#island[data-view="open"] .v-open, #island[data-view="palette"] .v-palette, #island[data-view="drop"] .v-drop, #island[data-view="ask"] .v-ask {
+#island[data-view="open"] .v-open, #island[data-view="palette"] .v-palette, #island[data-view="drop"] .v-drop, #island[data-view="ask"] .v-ask, #island[data-view="qchat"] .v-qchat {
   opacity: 1; pointer-events: auto; transform: none; filter: none; transition: opacity .32s .1s, transform .55s .05s var(--spring), filter .3s .08s;
 }
 
@@ -191,7 +191,7 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; line-height: 1.
   translate: var(--ex, 0px) var(--ey, 0px);
   /* every part of the face morphs: size, roundness, outline (arcs), cut (angry brows), colour */
   transition: height .42s cubic-bezier(.34, 1.25, .5, 1), width .42s cubic-bezier(.34, 1.25, .5, 1), border-radius .45s ease, border-width .38s ease,
-    translate .14s ease-out, transform .45s var(--spring), background-color .45s ease, border-color .45s ease, clip-path .45s ease, scale .15s ease; }
+    translate .22s ease-out, transform .45s var(--spring), background-color .45s ease, border-color .45s ease, clip-path .45s ease, scale .15s ease; }
 .blink .eye { transition-duration: .09s, .09s, .2s, .2s, .14s, .3s, .45s, .45s, .3s, .15s; }
 /* the face squints for a moment while it changes expression */
 .eye .pu { display: none; }
@@ -379,45 +379,45 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; line-height: 1.
 .bubble.dl .ring { position: absolute; inset: 5px; width: auto; height: auto; }
 
 /* ---------------- idle tricks (every ~30 s when the island is calm) ---------------- */
-.trick-spin .eyes { animation: trickSpin 1.15s cubic-bezier(.45, 0, .25, 1.35); }
+#stage.trick-spin .eyes { animation: trickSpin 1.15s cubic-bezier(.45, 0, .25, 1.35); }
 /* the tricks end where the eyes are looking, so nothing snaps back */
 @keyframes trickSpin { 0% { transform: rotate(0); } 18% { transform: translateY(-3px) rotate(-25deg) scale(1.05); } 82% { transform: rotate(372deg) scale(1.03); } 100% { transform: rotate(360deg); } }
 
-.trick-roll .eye { animation: trickRoll 1.5s ease-in-out; }
+#stage.trick-roll .eye { animation: trickRoll 1.5s ease-in-out; }
 @keyframes trickRoll {
-  0%, 100% { translate: var(--ex, 0px) var(--ey, 0px); } 12% { translate: 3px 0; } 25% { translate: 2.2px -3px; } 37% { translate: 0 -4px; }
-  50% { translate: -2.2px -3px; } 62% { translate: -3px 0; } 75% { translate: -2.2px 3px; } 87% { translate: 0 3px; }
+  0%, 100% { translate: var(--ex, 0px) var(--ey, 0px); } 12% { translate: calc(var(--ex, 0px) + 3px) var(--ey, 0px); } 25% { translate: calc(var(--ex, 0px) + 2.2px) calc(var(--ey, 0px) + -3px); } 37% { translate: var(--ex, 0px) calc(var(--ey, 0px) + -4px); }
+  50% { translate: calc(var(--ex, 0px) + -2.2px) calc(var(--ey, 0px) + -3px); } 62% { translate: calc(var(--ex, 0px) + -3px) var(--ey, 0px); } 75% { translate: calc(var(--ex, 0px) + -2.2px) calc(var(--ey, 0px) + 3px); } 87% { translate: var(--ex, 0px) calc(var(--ey, 0px) + 3px); }
 }
 
-.trick-cross .eye:first-child { animation: crossL 1.3s ease-in-out; }
-.trick-cross .eye:nth-child(2) { animation: crossR 1.3s ease-in-out; }
-@keyframes crossL { 0%, 100% { translate: var(--ex, 0px) var(--ey, 0px); height: 16px; } 25%, 70% { translate: 2.3px 1px; height: 12px; } }
-@keyframes crossR { 0%, 100% { translate: var(--ex, 0px) var(--ey, 0px); height: 16px; } 25%, 70% { translate: -2.3px 1px; height: 12px; } }
+#stage.trick-cross .eye:first-child { animation: crossL 1.3s ease-in-out; }
+#stage.trick-cross .eye:nth-child(2) { animation: crossR 1.3s ease-in-out; }
+@keyframes crossL { 0%, 100% { translate: var(--ex, 0px) var(--ey, 0px); height: 16px; } 25%, 70% { translate: calc(var(--ex, 0px) + 2.3px) calc(var(--ey, 0px) + 1px); height: 12px; } }
+@keyframes crossR { 0%, 100% { translate: var(--ex, 0px) var(--ey, 0px); height: 16px; } 25%, 70% { translate: calc(var(--ex, 0px) + -2.3px) calc(var(--ey, 0px) + 1px); height: 12px; } }
 
-.trick-wink .eye:nth-child(2) { animation: wink .75s ease-in-out; }
-.trick-wink .eye:first-child { animation: winkOther .75s ease-in-out; }
-.trick-wink .eyes { animation: winkTilt .75s ease-in-out; }
-@keyframes wink { 0%, 100% { height: 16px; } 30%, 60% { height: 2.5px; width: 8px; translate: 0 1px; } }
-@keyframes winkOther { 30%, 60% { height: 13px; translate: 0 -1px; } }
+#stage.trick-wink .eye:nth-child(2) { animation: wink .75s ease-in-out; }
+#stage.trick-wink .eye:first-child { animation: winkOther .75s ease-in-out; }
+#stage.trick-wink .eyes { animation: winkTilt .75s ease-in-out; }
+@keyframes wink { 0%, 100% { height: 16px; } 30%, 60% { height: 2.5px; width: 8px; translate: var(--ex, 0px) calc(var(--ey, 0px) + 1px); } }
+@keyframes winkOther { 30%, 60% { height: 13px; translate: var(--ex, 0px) calc(var(--ey, 0px) + -1px); } }
 @keyframes winkTilt { 30%, 60% { transform: rotate(-8deg) translateY(-1px); } }
 
 /* the eyes jump over each other and swap places */
-.trick-swap .eye:first-child { animation: swapL 1.1s cubic-bezier(.5, 0, .3, 1); }
-.trick-swap .eye:nth-child(2) { animation: swapR 1.1s cubic-bezier(.5, 0, .3, 1); }
-@keyframes swapL { 0% { translate: var(--ex, 0px) var(--ey, 0px); } 30% { translate: 5.5px -6px; height: 10px; } 60% { translate: 11px 0; height: 17px; } 72% { height: 15px; } 100% { translate: 11px 0; height: 16px; } }
-@keyframes swapR { 0% { translate: var(--ex, 0px) var(--ey, 0px); } 30% { translate: -5.5px 4px; height: 10px; } 60% { translate: -11px 0; height: 17px; } 72% { height: 15px; } 100% { translate: -11px 0; height: 16px; } }
+#stage.trick-swap .eye:first-child { animation: swapL 1.1s cubic-bezier(.5, 0, .3, 1); }
+#stage.trick-swap .eye:nth-child(2) { animation: swapR 1.1s cubic-bezier(.5, 0, .3, 1); }
+@keyframes swapL { 0% { translate: var(--ex, 0px) var(--ey, 0px); } 30% { translate: calc(var(--ex, 0px) + 5.5px) calc(var(--ey, 0px) + -6px); height: 10px; } 60% { translate: calc(var(--ex, 0px) + 11px) var(--ey, 0px); height: 17px; } 72% { height: 15px; } 100% { translate: calc(var(--ex, 0px) + 11px) var(--ey, 0px); height: 16px; } }
+@keyframes swapR { 0% { translate: var(--ex, 0px) var(--ey, 0px); } 30% { translate: calc(var(--ex, 0px) + -5.5px) calc(var(--ey, 0px) + 4px); height: 10px; } 60% { translate: calc(var(--ex, 0px) + -11px) var(--ey, 0px); height: 17px; } 72% { height: 15px; } 100% { translate: calc(var(--ex, 0px) + -11px) var(--ey, 0px); height: 16px; } }
 
-.trick-jump .eyes { animation: trickJump .9s cubic-bezier(.3, 0, .3, 1); }
+#stage.trick-jump .eyes { animation: trickJump .9s cubic-bezier(.3, 0, .3, 1); }
 @keyframes trickJump {
   0%, 100% { transform: translateY(0) scale(1, 1); } 15% { transform: translateY(1px) scale(1.15, .8); }
   40% { transform: translateY(-6px) scale(.9, 1.12); } 65% { transform: translateY(0) scale(1.12, .85); } 80% { transform: translateY(-1px) scale(.97, 1.03); }
 }
 
-.trick-look .eye { animation: trickLook 1.8s ease-in-out; }
-@keyframes trickLook { 0%, 100% { translate: var(--ex, 0px) var(--ey, 0px); } 15%, 40% { translate: -3.5px 0; } 55%, 80% { translate: 3.5px 0; } }
+#stage.trick-look .eye { animation: trickLook 1.8s ease-in-out; }
+@keyframes trickLook { 0%, 100% { translate: var(--ex, 0px) var(--ey, 0px); } 15%, 40% { translate: calc(var(--ex, 0px) + -3.5px) var(--ey, 0px); } 55%, 80% { translate: calc(var(--ex, 0px) + 3.5px) var(--ey, 0px); } }
 
 /* mini island without music */
-.v-mini.sum { grid-template-columns: auto auto 1fr; gap: 18px; padding: 12px 18px; }
+:is(.v-mini.sum, .v-mini .mghost.sum) { grid-template-columns: auto auto 1fr; gap: 18px; padding: 12px 18px; }
 .ms-clock b { display: block; font-size: 28px; font-weight: 300; letter-spacing: -1px; line-height: 1; font-variant-numeric: tabular-nums; }
 .ms-clock small, .ms-w small { display: block; font-size: 11.5px; color: var(--fg2); margin-top: 3px; }
 .ms-w { display: flex; align-items: center; gap: 8px; }
@@ -436,11 +436,11 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; line-height: 1.
 .mini-x .ic { transform: rotate(90deg); }
 
 /* mini island without music: everything centred and evenly spaced */
-.v-mini.sum { display: flex; align-items: center; justify-content: space-evenly; gap: 14px; padding: 0 18px; }
-.v-mini.sum .ms-clock { text-align: center; }
-.v-mini.sum .ms-w { align-items: center; }
-.v-mini.sum .ms-w > span:last-child { text-align: left; }
-.v-mini.sum .ms-acts { justify-content: center; align-items: center; }
+:is(.v-mini.sum, .v-mini .mghost.sum) { display: flex; align-items: center; justify-content: space-evenly; gap: 14px; padding: 0 18px; }
+:is(.v-mini.sum, .v-mini .mghost.sum) .ms-clock { text-align: center; }
+:is(.v-mini.sum, .v-mini .mghost.sum) .ms-w { align-items: center; }
+:is(.v-mini.sum, .v-mini .mghost.sum) .ms-w > span:last-child { text-align: left; }
+:is(.v-mini.sum, .v-mini .mghost.sum) .ms-acts { justify-content: center; align-items: center; }
 
 /* shy / loving: soft pink arcs looking down and aside, blushing cheeks, little hearts */
 .eyes::before, .eyes::after { content: ''; position: absolute; top: 12px; width: 7px; height: 4px; border-radius: 50%; background: #ff7aa8; opacity: 0; filter: blur(1.1px); transition: opacity .5s; pointer-events: none; }
@@ -490,40 +490,40 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; line-height: 1.
 .fx > i { position: absolute; display: block; opacity: 0; transition: opacity .35s, transform .45s var(--spring); }
 /* thinking: a little loading ring above */
 .fx-load { right: -13px; top: -7px; width: 9px; height: 9px; border-radius: 50%; border: 1.8px solid var(--eye); border-right-color: transparent; border-bottom-color: color-mix(in srgb, var(--eye) 35%, transparent); transform: scale(.4); }
-:is(.mood-think .eyes, .eyes.e-think) .fx-load { opacity: .95; transform: scale(1); animation: rot .8s linear infinite; box-shadow: 0 0 8px -1px var(--eyeGlow); }
+:is(:is(.mood-think .eyes, .eyes.e-think) .fx-load, .fx-load.hold) { opacity: .95; transform: scale(1); animation: rot .8s linear infinite; box-shadow: 0 0 8px -1px var(--eyeGlow); }
 /* busy: typing dots */
 .fx-dots { right: -16px; top: -4px; display: flex !important; gap: 2px; }
 .fx-dots b { width: 3px; height: 3px; border-radius: 50%; background: var(--eye); }
-:is(.mood-busy .eyes, .eyes.e-busy) .fx-dots { opacity: .9; }
-:is(.mood-busy .eyes, .eyes.e-busy) .fx-dots b { animation: fxDot 1s ease-in-out infinite; }
-:is(.mood-busy .eyes, .eyes.e-busy) .fx-dots b:nth-child(2) { animation-delay: .15s; }
-:is(.mood-busy .eyes, .eyes.e-busy) .fx-dots b:nth-child(3) { animation-delay: .3s; }
+:is(:is(.mood-busy .eyes, .eyes.e-busy) .fx-dots, .fx-dots.hold) { opacity: .9; }
+:is(:is(.mood-busy .eyes, .eyes.e-busy) .fx-dots, .fx-dots.hold) b { animation: fxDot 1s ease-in-out infinite; }
+:is(:is(.mood-busy .eyes, .eyes.e-busy) .fx-dots, .fx-dots.hold) b:nth-child(2) { animation-delay: .15s; }
+:is(:is(.mood-busy .eyes, .eyes.e-busy) .fx-dots, .fx-dots.hold) b:nth-child(3) { animation-delay: .3s; }
 @keyframes fxDot { 0%, 60%, 100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-3px); opacity: 1; } }
 /* idea / done: a light bulb pops up and glows */
 .fx-bulb { right: -15px; top: -8px; color: #ffd23f; transform: translateY(6px) scale(.2); }
 .fx-bulb svg { display: block; filter: drop-shadow(0 0 4px rgba(255, 210, 63, .9)); }
 :is(.mood-idea .eyes, .eyes.e-idea) { --eye: #fff3b0; --eyeGlow: rgba(255, 210, 63, .75); }
 :is(.mood-idea .eyes, .eyes.e-idea) .eye { height: 9px; width: 5px; border-radius: 4px; }
-:is(.mood-idea .eyes, .eyes.e-idea) .fx-bulb { opacity: 1; transform: translateY(0) scale(1); animation: bulbOn 2.4s ease-out both; }
+:is(:is(.mood-idea .eyes, .eyes.e-idea) .fx-bulb, .fx-bulb.hold) { opacity: 1; transform: translateY(0) scale(1); animation: bulbOn 2.4s ease-out both; }
 @keyframes bulbOn {
   0% { transform: translateY(6px) scale(.2); } 18% { transform: translateY(-1px) scale(1.25); } 30% { transform: translateY(0) scale(1); }
   40%, 60%, 80% { filter: brightness(1.5); } 50%, 70% { filter: brightness(1); } 100% { transform: translateY(0) scale(1); }
 }
 /* startled: an exclamation mark */
 .fx-bang { right: -11px; top: -9px; font: 900 11px/1 system-ui, sans-serif; color: #ffd23f; font-style: normal; transform: scale(.2) rotate(-20deg); }
-:is(.mood-startle .eyes, .eyes.e-startle) .fx-bang { opacity: 1; transform: scale(1) rotate(8deg); }
+:is(:is(.mood-startle .eyes, .eyes.e-startle) .fx-bang, .fx-bang.hold) { opacity: 1; transform: scale(1) rotate(8deg); }
 /* dancing: music notes float up */
 .fx-notes { right: -12px; top: -2px; color: var(--eye); font-style: normal; }
 .fx-notes b { position: absolute; font-size: 9px; opacity: 0; }
-:is(.mood-dance .eyes, .eyes.e-dance) .fx-notes { opacity: 1; }
-:is(.mood-dance .eyes, .eyes.e-dance) .fx-notes b { animation: noteUp 2.4s ease-out infinite; }
-:is(.mood-dance .eyes, .eyes.e-dance) .fx-notes b:nth-child(2) { animation-delay: .8s; font-size: 10px; }
-:is(.mood-dance .eyes, .eyes.e-dance) .fx-notes b:nth-child(3) { animation-delay: 1.6s; }
+:is(:is(.mood-dance .eyes, .eyes.e-dance) .fx-notes, .fx-notes.hold) { opacity: 1; }
+:is(:is(.mood-dance .eyes, .eyes.e-dance) .fx-notes, .fx-notes.hold) b { animation: noteUp 2.4s ease-out infinite; }
+:is(:is(.mood-dance .eyes, .eyes.e-dance) .fx-notes, .fx-notes.hold) b:nth-child(2) { animation-delay: .8s; font-size: 10px; }
+:is(:is(.mood-dance .eyes, .eyes.e-dance) .fx-notes, .fx-notes.hold) b:nth-child(3) { animation-delay: 1.6s; }
 @keyframes noteUp { 0% { opacity: 0; transform: translate(0, 4px) rotate(-10deg); } 25% { opacity: .9; } 100% { opacity: 0; transform: translate(6px, -14px) rotate(14deg); } }
 /* angry: a throbbing anger mark */
 .fx-vein { right: -13px; top: -8px; color: #ff4a3d; transform: scale(.2); }
 .fx-vein svg { display: block; }
-:is(.mood-angry .eyes, .eyes.e-angry) .fx-vein { opacity: 1; transform: scale(1); animation: vein .5s ease-in-out infinite alternate; }
+:is(:is(.mood-angry .eyes, .eyes.e-angry) .fx-vein, .fx-vein.hold) { opacity: 1; transform: scale(1); animation: vein .5s ease-in-out infinite alternate; }
 @keyframes vein { to { transform: scale(1.3); } }
 /* in the white theme the light effects need a darker tone */
 :is(:root[data-mode="light"] #stage, .mp[data-mode="light"]) .fx-bulb { color: #f0a500; }
@@ -551,8 +551,8 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; line-height: 1.
 .zz { right: auto; left: 50%; top: -9px; margin-left: -3px; }
 .hearts { top: -6px; }
 @keyframes noteUp { 0% { opacity: 0; transform: translate(0, 4px) rotate(-10deg); } 25% { opacity: .95; } 100% { opacity: 0; transform: translate(var(--nx, 6px), -12px) rotate(14deg); } }
-:is(.mood-dance .eyes, .eyes.e-dance) .fx-notes b:nth-child(1) { --nx: -9px; }
-:is(.mood-dance .eyes, .eyes.e-dance) .fx-notes b:nth-child(3) { --nx: 10px; }
+:is(:is(.mood-dance .eyes, .eyes.e-dance) .fx-notes, .fx-notes.hold) b:nth-child(1) { --nx: -9px; }
+:is(:is(.mood-dance .eyes, .eyes.e-dance) .fx-notes, .fx-notes.hold) b:nth-child(3) { --nx: 10px; }
 
 /* ================= joy: happy arcs, jumping, sparkles ================= */
 :is(.mood-joy .eyes, .eyes.e-joy) { --eye: #7dffb0; --eyeGlow: rgba(60, 230, 140, .7); animation: joyJump .62s cubic-bezier(.3, 0, .3, 1) 4; }
@@ -563,12 +563,12 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; line-height: 1.
 }
 .fx-joy { top: -6px; margin-left: 0; color: #a3ffcf; font-style: normal; }
 .fx-joy b { position: absolute; font-size: 11px; opacity: 0; text-shadow: 0 0 6px rgba(120,255,180,.8); }
-:is(.mood-joy .eyes, .eyes.e-joy) .fx-joy { opacity: 1; }
-:is(.mood-joy .eyes, .eyes.e-joy) .fx-joy b { animation: sparkle 1.1s ease-out infinite; }
-:is(.mood-joy .eyes, .eyes.e-joy) .fx-joy b:nth-child(1) { --sx: -16px; --sy: -8px; }
-:is(.mood-joy .eyes, .eyes.e-joy) .fx-joy b:nth-child(2) { --sx: 14px; --sy: -10px; animation-delay: .25s; font-size: 10px; }
-:is(.mood-joy .eyes, .eyes.e-joy) .fx-joy b:nth-child(3) { --sx: -6px; --sy: -14px; animation-delay: .5s; }
-:is(.mood-joy .eyes, .eyes.e-joy) .fx-joy b:nth-child(4) { --sx: 8px; --sy: -4px; animation-delay: .75s; font-size: 7px; color: #ffe27a; }
+:is(:is(.mood-joy .eyes, .eyes.e-joy) .fx-joy, .fx-joy.hold) { opacity: 1; }
+:is(:is(.mood-joy .eyes, .eyes.e-joy) .fx-joy, .fx-joy.hold) b { animation: sparkle 1.1s ease-out infinite; }
+:is(:is(.mood-joy .eyes, .eyes.e-joy) .fx-joy, .fx-joy.hold) b:nth-child(1) { --sx: -16px; --sy: -8px; }
+:is(:is(.mood-joy .eyes, .eyes.e-joy) .fx-joy, .fx-joy.hold) b:nth-child(2) { --sx: 14px; --sy: -10px; animation-delay: .25s; font-size: 10px; }
+:is(:is(.mood-joy .eyes, .eyes.e-joy) .fx-joy, .fx-joy.hold) b:nth-child(3) { --sx: -6px; --sy: -14px; animation-delay: .5s; }
+:is(:is(.mood-joy .eyes, .eyes.e-joy) .fx-joy, .fx-joy.hold) b:nth-child(4) { --sx: 8px; --sy: -4px; animation-delay: .75s; font-size: 7px; color: #ffe27a; }
 @keyframes sparkle { 0% { opacity: 0; transform: translate(0, 2px) scale(.3) rotate(0); } 35% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--sx), var(--sy)) scale(1.2) rotate(120deg); } }
 :is(:root[data-mode="light"] #stage, .mp[data-mode="light"]) :is(.mood-joy .eyes, .eyes.e-joy) { --eye: #16a34a; }
 :is(:root[data-mode="light"] #stage, .mp[data-mode="light"]) .fx-joy { color: #16a34a; }
@@ -580,34 +580,34 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; line-height: 1.
    jump in one frame - that was the abrupt part */
 .curious .eyes:not(.fxl) { scale: 1.1 1.16; }
 /* boop: poked -> squish */
-.trick-boop .eyes { animation: boop .5s cubic-bezier(.3, 1.6, .5, 1); }
-@keyframes boop { 0% { transform: scale(1.3, .55); } 45% { transform: scale(.85, 1.2); } 100% { transform: scale(1); } }
+#stage.trick-boop .eyes { animation: boop .5s ease-in-out; }
+@keyframes boop { 0% { transform: scale(1); } 22% { transform: scale(1.1, .88) translateY(1px); } 55% { transform: scale(.96, 1.06) translateY(-1px); } 80% { transform: scale(1.02, .98); } 100% { transform: scale(1); } } /* a soft squish, not flattened */
 /* peek: shrink away, then pop out */
-.trick-peek .eyes { animation: peek 1.25s ease-in-out; }
+#stage.trick-peek .eyes { animation: peek 1.25s ease-in-out; }
 @keyframes peek { 0%, 100% { transform: none; } 20%, 55% { transform: translateY(5px) scale(.6, .3); } 70% { transform: translateY(-3px) scale(1.15); } }
 /* bounce: two little hops */
-.trick-bounce .eyes { animation: bounce2 1s ease-out; }
+#stage.trick-bounce .eyes { animation: bounce2 1s ease-out; }
 @keyframes bounce2 { 0%, 50%, 100% { transform: translateY(0) scale(1); } 20% { transform: translateY(-5px) scale(.95, 1.1); } 70% { transform: translateY(-3px); } 45%, 95% { transform: translateY(0) scale(1.1, .88); } }
 /* giggle: a happy shake */
-.trick-giggle .eyes { animation: giggle .9s ease-in-out; }
-.trick-giggle .eye { height: 6px; width: 8px; border-radius: 6px 6px 2px 2px; }
+#stage.trick-giggle .eyes { animation: giggle .9s ease-in-out; }
+#stage.trick-giggle .eye { height: 6px; width: 8px; border-radius: 6px 6px 2px 2px; }
 @keyframes giggle { 0%, 100% { transform: rotate(0); } 15%, 45%, 75% { transform: rotate(-9deg) translateY(-1px); } 30%, 60%, 90% { transform: rotate(9deg); } }
 /* nod: "got it" */
-.trick-nod .eyes { animation: nod .85s ease-in-out; }
+#stage.trick-nod .eyes { animation: nod .85s ease-in-out; }
 @keyframes nod { 0%, 100% { transform: none; } 25%, 65% { transform: translateY(3px) scaleY(.85); } 45% { transform: translateY(-1px); } }
 /* squint: suspicious look */
-.trick-squint .eye { animation: squint 1.05s ease-in-out; }
-@keyframes squint { 0%, 100% { height: 16px; } 20%, 75% { height: 4px; width: 7px; translate: 2px 0; } 45% { translate: -2px 0; height: 4px; width: 7px; } }
+#stage.trick-squint .eye { animation: squint 1.05s ease-in-out; }
+@keyframes squint { 0%, 100% { height: 16px; } 20%, 75% { height: 4px; width: 7px; translate: calc(var(--ex, 0px) + 2px) var(--ey, 0px); } 45% { translate: calc(var(--ex, 0px) + -2px) var(--ey, 0px); height: 4px; width: 7px; } }
 /* love: little hearts for no reason */
 .trick-love .hearts { opacity: 1; }
 .trick-love .hearts b { animation: heartUp 1.7s ease-out; }
 .trick-love .hearts b:nth-child(1) { --hx: -12px; }
 .trick-love .hearts b:nth-child(2) { --hx: 4px; animation-delay: .3s; }
 .trick-love .hearts b:nth-child(3) { --hx: 14px; animation-delay: .6s; }
-.trick-love .eyes { --eye: #ffc2da; }
+#stage.trick-love .eyes { --eye: #ffc2da; }
 /* stretch: waking up */
-.trick-stretch .eyes { animation: stretch 1.8s ease-in-out; }
-.trick-stretch .eye { animation: stretchEye 1.8s ease-in-out; }
+#stage.trick-stretch .eyes { animation: stretch 1.8s ease-in-out; }
+#stage.trick-stretch .eye { animation: stretchEye 1.8s ease-in-out; }
 @keyframes stretch { 0% { transform: scale(1, .3); } 35% { transform: scale(.85, 1.35) translateY(-2px); } 60% { transform: scale(1.1, .9); } 100% { transform: none; } }
 @keyframes stretchEye { 0%, 25% { height: 3px; } 40% { height: 18px; } 100% { height: 16px; } }
 
@@ -656,12 +656,12 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; line-height: 1.
 :is(.mood-shy, .trick-love) .fxl .hearts b:nth-child(1) { --hx: -26px; }
 :is(.mood-shy, .trick-love) .fxl .hearts b:nth-child(3) { --hx: 28px; }
 @keyframes heartUp { 0% { opacity: 0; transform: translate(0, 4px) scale(.5); } 25% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--hx, 0px), -24px) scale(1.25); } }
-.mood-joy .fxl .fx-joy b:nth-child(1) { --sx: -34px; --sy: -12px; }
-.mood-joy .fxl .fx-joy b:nth-child(2) { --sx: 32px; --sy: -14px; }
-.mood-joy .fxl .fx-joy b:nth-child(3) { --sx: -22px; --sy: 18px; }
-.mood-joy .fxl .fx-joy b:nth-child(4) { --sx: 26px; --sy: 16px; }
-.mood-dance .fxl .fx-notes b:nth-child(1) { --nx: -24px; }
-.mood-dance .fxl .fx-notes b:nth-child(3) { --nx: 26px; }
+:is(.mood-joy .fxl .fx-joy, .fxl .fx-joy.hold) b:nth-child(1) { --sx: -34px; --sy: -12px; }
+:is(.mood-joy .fxl .fx-joy, .fxl .fx-joy.hold) b:nth-child(2) { --sx: 32px; --sy: -14px; }
+:is(.mood-joy .fxl .fx-joy, .fxl .fx-joy.hold) b:nth-child(3) { --sx: -22px; --sy: 18px; }
+:is(.mood-joy .fxl .fx-joy, .fxl .fx-joy.hold) b:nth-child(4) { --sx: 26px; --sy: 16px; }
+:is(.mood-dance .fxl .fx-notes, .fxl .fx-notes.hold) b:nth-child(1) { --nx: -24px; }
+:is(.mood-dance .fxl .fx-notes, .fxl .fx-notes.hold) b:nth-child(3) { --nx: 26px; }
 @keyframes noteUp { 0% { opacity: 0; transform: translate(0, 4px) rotate(-10deg); } 25% { opacity: .95; } 100% { opacity: 0; transform: translate(var(--nx, 6px), -20px) rotate(14deg); } }
 
 /* ---------- characters ---------- */
@@ -691,7 +691,7 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; line-height: 1.
 .char-ghost .deco { z-index: -1; }
 .char-ghost .deco i:nth-child(1) { inset: -6px -8px -7px; border-radius: 50% 50% 35% 35% / 60% 60% 40% 40%; background: rgba(240, 240, 255, .92); box-shadow: 0 0 12px rgba(220, 220, 255, .5); animation: ghostFloat 2.6s ease-in-out infinite; }
 #stage.char-ghost:not([class*="mood-"]) .eyes { --eye: #23233a; --eyeGlow: transparent; }
-.char-ghost .eyes:not(.fxl) { animation: ghostFloat 2.6s ease-in-out infinite; }
+:where(.char-ghost .eyes:not(.fxl)) { animation: ghostFloat 2.6s ease-in-out infinite; } /* the weakest rule: any trick or mood that moves the face plays over the floating */
 @keyframes ghostFloat { 50% { transform: translateY(-1.5px); } }
 /* alien: green with two antennae */
 #stage.char-alien:not([class*="mood-"]) .eyes { --eye: #8dff7a; --eyeGlow: rgba(110, 255, 90, .55); }
@@ -725,10 +725,10 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; line-height: 1.
 @keyframes ponderTilt { 0%, 38% { transform: rotate(-6deg); } 48%, 86% { transform: rotate(5deg) translateY(-.5px); } 96%, 100% { transform: rotate(-6deg); } }
 .fx-orbit { left: 50%; top: -15px; width: 16px; height: 9px; margin-left: -8px; }
 .fx-orbit b { position: absolute; left: 50%; top: 50%; width: 3.5px; height: 3.5px; margin: -1.75px; border-radius: 50%; background: var(--eye); box-shadow: 0 0 5px var(--eyeGlow); }
-:is(.mood-ponder .eyes, .eyes.e-ponder) .fx-orbit { opacity: 1; }
-:is(.mood-ponder .eyes, .eyes.e-ponder) .fx-orbit b { animation: orbit 1.5s linear infinite; }
-:is(.mood-ponder .eyes, .eyes.e-ponder) .fx-orbit b:nth-child(2) { animation-delay: -.5s; width: 3px; height: 3px; opacity: .75; }
-:is(.mood-ponder .eyes, .eyes.e-ponder) .fx-orbit b:nth-child(3) { animation-delay: -1s; width: 2.5px; height: 2.5px; opacity: .5; }
+:is(:is(.mood-ponder .eyes, .eyes.e-ponder) .fx-orbit, .fx-orbit.hold) { opacity: 1; }
+:is(:is(.mood-ponder .eyes, .eyes.e-ponder) .fx-orbit, .fx-orbit.hold) b { animation: orbit 1.5s linear infinite; }
+:is(:is(.mood-ponder .eyes, .eyes.e-ponder) .fx-orbit, .fx-orbit.hold) b:nth-child(2) { animation-delay: -.5s; width: 3px; height: 3px; opacity: .75; }
+:is(:is(.mood-ponder .eyes, .eyes.e-ponder) .fx-orbit, .fx-orbit.hold) b:nth-child(3) { animation-delay: -1s; width: 2.5px; height: 2.5px; opacity: .5; }
 /* an ellipse around the head, the far side smaller and dimmer */
 @keyframes orbit {
   0% { transform: translate(8px, 0) scale(1); } 25% { transform: translate(0, 3px) scale(1.25); }
@@ -745,23 +745,23 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; line-height: 1.
 
 /* ================= reactions ================= */
 /* switched windows / new track: a quick look around */
-.trick-glance .eye { animation: glance .62s ease-in-out; }
-@keyframes glance { 0%, 100% { translate: var(--ex, 0px) var(--ey, 0px); } 22%, 42% { translate: -3.5px -.5px; } 58%, 80% { translate: 3.5px -.5px; } }
+#stage.trick-glance .eye { animation: glance .62s ease-in-out; }
+@keyframes glance { 0%, 100% { translate: var(--ex, 0px) var(--ey, 0px); } 22%, 42% { translate: calc(var(--ex, 0px) + -3.5px) calc(var(--ey, 0px) + -.5px); } 58%, 80% { translate: calc(var(--ex, 0px) + 3.5px) calc(var(--ey, 0px) + -.5px); } }
 /* mouse wheel / theme switch: dizzy, eyes spin in little circles */
-.trick-dizzy .eyes:not(.fxl) { animation: dizzySway 1.25s ease-in-out; }
-.trick-dizzy .eye:first-child { animation: dizzyL 1.25s linear; }
-.trick-dizzy .eye:nth-child(2) { animation: dizzyR 1.25s linear; }
+#stage.trick-dizzy .eyes:not(.fxl) { animation: dizzySway 1.25s ease-in-out; }
+#stage.trick-dizzy .eye:first-child { animation: dizzyL 1.25s linear; }
+#stage.trick-dizzy .eye:nth-child(2) { animation: dizzyR 1.25s linear; }
 @keyframes dizzySway { 25% { transform: rotate(-9deg); } 50% { transform: rotate(8deg); } 75% { transform: rotate(-5deg); } }
-@keyframes dizzyL { 0%, 100% { translate: 0 0; height: 8px; } 25%, 75% { height: 8px; } 12% { translate: 2.5px -2.5px; } 25% { translate: 3.5px 0; } 37% { translate: 2.5px 2.5px; } 50% { translate: 0 3.5px; } 62% { translate: -2.5px 2.5px; } 75% { translate: -3.5px 0; } 87% { translate: -2.5px -2.5px; } }
-@keyframes dizzyR { 0%, 100% { translate: 0 0; height: 8px; } 25%, 75% { height: 8px; } 12% { translate: -2.5px 2.5px; } 25% { translate: -3.5px 0; } 37% { translate: -2.5px -2.5px; } 50% { translate: 0 -3.5px; } 62% { translate: 2.5px -2.5px; } 75% { translate: 3.5px 0; } 87% { translate: 2.5px 2.5px; } }
+@keyframes dizzyL { 0%, 100% { translate: var(--ex, 0px) var(--ey, 0px); height: 8px; } 25%, 75% { height: 8px; } 12% { translate: calc(var(--ex, 0px) + 2.5px) calc(var(--ey, 0px) + -2.5px); } 25% { translate: calc(var(--ex, 0px) + 3.5px) var(--ey, 0px); } 37% { translate: calc(var(--ex, 0px) + 2.5px) calc(var(--ey, 0px) + 2.5px); } 50% { translate: var(--ex, 0px) calc(var(--ey, 0px) + 3.5px); } 62% { translate: calc(var(--ex, 0px) + -2.5px) calc(var(--ey, 0px) + 2.5px); } 75% { translate: calc(var(--ex, 0px) + -3.5px) var(--ey, 0px); } 87% { translate: calc(var(--ex, 0px) + -2.5px) calc(var(--ey, 0px) + -2.5px); } }
+@keyframes dizzyR { 0%, 100% { translate: var(--ex, 0px) var(--ey, 0px); height: 8px; } 25%, 75% { height: 8px; } 12% { translate: calc(var(--ex, 0px) + -2.5px) calc(var(--ey, 0px) + 2.5px); } 25% { translate: calc(var(--ex, 0px) + -3.5px) var(--ey, 0px); } 37% { translate: calc(var(--ex, 0px) + -2.5px) calc(var(--ey, 0px) + -2.5px); } 50% { translate: var(--ex, 0px) calc(var(--ey, 0px) + -3.5px); } 62% { translate: calc(var(--ex, 0px) + 2.5px) calc(var(--ey, 0px) + -2.5px); } 75% { translate: calc(var(--ex, 0px) + 3.5px) var(--ey, 0px); } 87% { translate: calc(var(--ex, 0px) + 2.5px) calc(var(--ey, 0px) + 2.5px); } }
 /* right click: looks down at the menu */
-.trick-peekdown .eye { animation: peekdown 1s ease-in-out; }
-@keyframes peekdown { 0%, 100% { translate: var(--ex, 0px) var(--ey, 0px); } 20%, 80% { translate: 0 4px; height: 12px; } }
+#stage.trick-peekdown .eye { animation: peekdown 1s ease-in-out; }
+@keyframes peekdown { 0%, 100% { translate: var(--ex, 0px) var(--ey, 0px); } 20%, 80% { translate: var(--ex, 0px) calc(var(--ey, 0px) + 4px); height: 12px; } }
 /* do not disturb on: eyes shut, "shh" */
-.trick-shh .eye { animation: shh 1.25s ease-in-out; }
-@keyframes shh { 0%, 100% { height: 16px; } 18%, 78% { height: 2.5px; width: 8px; border-radius: 2px; translate: 0 2px; } }
+#stage.trick-shh .eye { animation: shh 1.25s ease-in-out; }
+@keyframes shh { 0%, 100% { height: 16px; } 18%, 78% { height: 2.5px; width: 8px; border-radius: 2px; translate: var(--ex, 0px) calc(var(--ey, 0px) + 2px); } }
 /* do not disturb off: a happy hop */
-.trick-hop .eyes:not(.fxl) { animation: hopOnce .55s cubic-bezier(.3, 0, .3, 1); }
+#stage.trick-hop .eyes:not(.fxl) { animation: hopOnce .55s cubic-bezier(.3, 0, .3, 1); }
 @keyframes hopOnce { 0%, 100% { transform: none; } 20% { transform: scale(1.12, .85); } 50% { transform: translateY(-5px) scale(.95, 1.1); } 80% { transform: scale(1.06, .94); } }
 
 /* ================= character in toasts and flashes ================= */
@@ -788,21 +788,21 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; line-height: 1.
 /* laugh: squeezed ^ ^ eyes shaking with laughter */
 :is(.mood-laugh .eyes, .eyes.e-laugh) { --eye: #ffd76a; --eyeGlow: rgba(255, 200, 60, .6); animation: laughShake .16s ease-in-out infinite alternate; }
 :is(.mood-laugh .eyes, .eyes.e-laugh) .eye { width: 9px; height: 5px; background-color: transparent; border-width: 2.6px 2.6px 0 2.6px; border-radius: 9px 9px 0 0; translate: 0 -1px; }
-:is(.mood-laugh .eyes, .eyes.e-laugh) .fx-joy, .mood-laugh .fxl .fx-joy { opacity: 1; }
-:is(.mood-laugh .eyes, .eyes.e-laugh) .fx-joy b, .mood-laugh .fxl .fx-joy b { animation: sparkle .9s ease-out infinite; color: #ffe27a; }
+:is(:is(.mood-laugh .eyes, .eyes.e-laugh) .fx-joy, .fx-joy.hold), :is(.mood-laugh .fxl .fx-joy, .fxl .fx-joy.hold) { opacity: 1; }
+:is(:is(.mood-laugh .eyes, .eyes.e-laugh) .fx-joy, .fx-joy.hold) b, :is(.mood-laugh .fxl .fx-joy, .fxl .fx-joy.hold) b { animation: sparkle .9s ease-out infinite; color: #ffe27a; }
 @keyframes laughShake { from { transform: translateY(0) rotate(-3deg); } to { transform: translateY(-1.5px) rotate(3deg); } }
 /* confused: one eye big, one squinting, head tilted, "?" */
 :is(.mood-confused .eyes, .eyes.e-confused) { --eye: #c4b5fd; --eyeGlow: rgba(160, 140, 255, .5); transform: rotate(-10deg); }
 :is(.mood-confused .eyes, .eyes.e-confused) .eye:first-child { height: 14px; width: 6px; }
 :is(.mood-confused .eyes, .eyes.e-confused) .eye:nth-child(2) { height: 5px; width: 6px; translate: 0 -2px; }
 .fx-q { left: 50%; top: -16px; margin-left: 6px; font: 800 13px/1 system-ui, sans-serif; font-style: normal; color: #c4b5fd; transform: scale(.3) rotate(-20deg); }
-:is(.mood-confused .eyes, .eyes.e-confused) .fx-q { opacity: 1; transform: rotate(12deg); animation: qBob 1.2s ease-in-out infinite; }
+:is(:is(.mood-confused .eyes, .eyes.e-confused) .fx-q, .fx-q.hold) { opacity: 1; transform: rotate(12deg); animation: qBob 1.2s ease-in-out infinite; }
 @keyframes qBob { 50% { transform: rotate(-8deg) translateY(-2px); } }
 /* excited: tall sparkling eyes bouncing fast */
 :is(.mood-excited .eyes, .eyes.e-excited) { --eye: #7df9ff; --eyeGlow: rgba(80, 230, 255, .7); animation: excitedBounce .32s ease-in-out infinite alternate; }
 :is(.mood-excited .eyes, .eyes.e-excited) .eye { height: 18px; width: 6px; border-radius: 4px; }
-:is(.mood-excited .eyes, .eyes.e-excited) .fx-joy, .mood-excited .fxl .fx-joy { opacity: 1; }
-:is(.mood-excited .eyes, .eyes.e-excited) .fx-joy b, .mood-excited .fxl .fx-joy b { animation: sparkle .8s ease-out infinite; color: #7df9ff; }
+:is(:is(.mood-excited .eyes, .eyes.e-excited) .fx-joy, .fx-joy.hold), :is(.mood-excited .fxl .fx-joy, .fxl .fx-joy.hold) { opacity: 1; }
+:is(:is(.mood-excited .eyes, .eyes.e-excited) .fx-joy, .fx-joy.hold) b, :is(.mood-excited .fxl .fx-joy, .fxl .fx-joy.hold) b { animation: sparkle .8s ease-out infinite; color: #7df9ff; }
 @keyframes excitedBounce { to { transform: translateY(-3px) scale(1.06); } }
 /* bored: flat heavy lids looking aside, a sigh "…" */
 :is(.mood-bored .eyes, .eyes.e-bored) { --eye: #b8bec9; --eyeGlow: transparent; }
@@ -810,17 +810,17 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; line-height: 1.
 @keyframes boredLook { 0%, 45% { translate: 3px 2px; } 55%, 95% { translate: -3px 2px; } 100% { translate: 3px 2px; } }
 .fx-dots3 { left: 50%; top: -9px; margin-left: 6px; display: flex !important; gap: 2px; }
 .fx-dots3 b { width: 2.5px; height: 2.5px; border-radius: 50%; background: var(--eye); opacity: 0; }
-:is(.mood-bored .eyes, .eyes.e-bored) .fx-dots3 { opacity: 1; }
-:is(.mood-bored .eyes, .eyes.e-bored) .fx-dots3 b { animation: sigh 3s ease-in-out infinite; }
-:is(.mood-bored .eyes, .eyes.e-bored) .fx-dots3 b:nth-child(2) { animation-delay: .35s; }
-:is(.mood-bored .eyes, .eyes.e-bored) .fx-dots3 b:nth-child(3) { animation-delay: .7s; }
+:is(:is(.mood-bored .eyes, .eyes.e-bored) .fx-dots3, .fx-dots3.hold) { opacity: 1; }
+:is(:is(.mood-bored .eyes, .eyes.e-bored) .fx-dots3, .fx-dots3.hold) b { animation: sigh 3s ease-in-out infinite; }
+:is(:is(.mood-bored .eyes, .eyes.e-bored) .fx-dots3, .fx-dots3.hold) b:nth-child(2) { animation-delay: .35s; }
+:is(:is(.mood-bored .eyes, .eyes.e-bored) .fx-dots3, .fx-dots3.hold) b:nth-child(3) { animation-delay: .7s; }
 @keyframes sigh { 0%, 20% { opacity: 0; } 35%, 70% { opacity: .8; } 90%, 100% { opacity: 0; } }
 /* scared: tiny trembling dots, pale, a drop of sweat */
 :is(.mood-scared .eyes, .eyes.e-scared) { --eye: #e8ecff; --eyeGlow: rgba(200, 210, 255, .4); animation: tremble .07s linear infinite alternate; }
 :is(.mood-scared .eyes, .eyes.e-scared) .eye { height: 4px; width: 4px; border-radius: 50%; }
 @keyframes tremble { from { transform: translateX(-.7px); } to { transform: translateX(.7px); } }
 .fx-sweat { left: 50%; top: -6px; margin-left: 11px; width: 4px; height: 6px; border-radius: 50% 50% 50% 50% / 30% 30% 70% 70%; background: #8fd0ff; transform: translateY(-3px); }
-:is(.mood-scared .eyes, .eyes.e-scared) .fx-sweat { opacity: 1; animation: sweat 1s ease-in infinite; }
+:is(:is(.mood-scared .eyes, .eyes.e-scared) .fx-sweat, .fx-sweat.hold) { opacity: 1; animation: sweat 1s ease-in infinite; }
 @keyframes sweat { 0% { transform: translateY(-3px); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(9px); opacity: 0; } }
 /* light theme: deeper tones */
 :is(:root[data-mode="light"] #stage, .mp[data-mode="light"]) :is(.mood-love .eyes, .eyes.e-love) { --eye: #e0457f; }
@@ -848,7 +848,7 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; line-height: 1.
 }
 /* the arcs squeeze on each landing */
 @keyframes joyBlink { 0%, 28%, 56%, 90%, 100% { scale: 1.15 .8; } 14%, 42%, 74% { scale: 1 1.1; } }
-:is(.mood-joy .eyes, .eyes.e-joy) .fx-joy, .mood-joy .fxl .fx-joy { opacity: 0 !important; }
+:is(:is(.mood-joy .eyes, .eyes.e-joy) .fx-joy, .fx-joy.hold), :is(.mood-joy .fxl .fx-joy, .fxl .fx-joy.hold) { opacity: 0 !important; }
 .fx-confetti { left: 50%; top: 2px; width: 0; height: 0; }
 .fx-confetti b { position: absolute; width: 3px; height: 5px; border-radius: 1px; opacity: 0; }
 @keyframes confetti {
@@ -881,14 +881,14 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; line-height: 1.
 /* ================= joy effect v3: soft glowing rings + rising light bubbles ================= */
 .fx-rings { left: 50%; top: 50%; width: 0; height: 0; }
 .fx-rings b { position: absolute; left: -14px; top: -14px; width: 28px; height: 28px; border-radius: 50%; border: 1.6px solid var(--eye); opacity: 0; box-shadow: 0 0 8px var(--eyeGlow); }
-.mood-joy .fxl .fx-rings, :is(.mood-joy .eyes, .eyes.e-joy) .fx-rings { opacity: 1; }
-.mood-joy .fxl .fx-rings b, :is(.mood-joy .eyes, .eyes.e-joy) .fx-rings b { animation: joyRing 1.4s ease-out infinite; }
-.mood-joy .fxl .fx-rings b:nth-child(2), :is(.mood-joy .eyes, .eyes.e-joy) .fx-rings b:nth-child(2) { animation-delay: .7s; }
+:is(.mood-joy .fxl .fx-rings, .fxl .fx-rings.hold), :is(:is(.mood-joy .eyes, .eyes.e-joy) .fx-rings, .fx-rings.hold) { opacity: 1; }
+:is(.mood-joy .fxl .fx-rings, .fxl .fx-rings.hold) b, :is(:is(.mood-joy .eyes, .eyes.e-joy) .fx-rings, .fx-rings.hold) b { animation: joyRing 1.4s ease-out infinite; }
+:is(.mood-joy .fxl .fx-rings, .fxl .fx-rings.hold) b:nth-child(2), :is(:is(.mood-joy .eyes, .eyes.e-joy) .fx-rings, .fx-rings.hold) b:nth-child(2) { animation-delay: .7s; }
 @keyframes joyRing { 0% { transform: scale(1); opacity: .85; } 100% { transform: scale(2.5); opacity: 0; } }
 .fx-bubbles { left: 50%; top: 0; width: 0; height: 0; }
 .fx-bubbles b { position: absolute; width: 4px; height: 4px; border-radius: 50%; background: var(--eye); box-shadow: 0 0 6px var(--eyeGlow); opacity: 0; }
-.mood-joy .fxl .fx-bubbles, :is(.mood-joy .eyes, .eyes.e-joy) .fx-bubbles { opacity: 1; }
-.mood-joy .fxl .fx-bubbles b, :is(.mood-joy .eyes, .eyes.e-joy) .fx-bubbles b { animation: joyBubble 1.8s ease-out infinite; }
+:is(.mood-joy .fxl .fx-bubbles, .fxl .fx-bubbles.hold), :is(:is(.mood-joy .eyes, .eyes.e-joy) .fx-bubbles, .fx-bubbles.hold) { opacity: 1; }
+:is(.mood-joy .fxl .fx-bubbles, .fxl .fx-bubbles.hold) b, :is(:is(.mood-joy .eyes, .eyes.e-joy) .fx-bubbles, .fx-bubbles.hold) b { animation: joyBubble 1.8s ease-out infinite; }
 .fx-bubbles b:nth-child(1) { --bx: -16px; }
 .fx-bubbles b:nth-child(2) { --bx: 2px; animation-delay: .6s !important; width: 3px; height: 3px; }
 .fx-bubbles b:nth-child(3) { --bx: 18px; animation-delay: 1.2s !important; }
@@ -1135,8 +1135,8 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; line-height: 1.
 :is(.cbtn, .cbtn-s, .mpb, .ibtn, .mini-x) :is(svg, i, span) { pointer-events: none; }
 
 /* sound from an app without media controls: no buttons or timeline, a speaker instead of a cover */
-.v-mini.soundonly .ctl, .v-mini.soundonly .prog { display: none; }
-.v-mini.soundonly .art, .cover.snd { display: grid; place-items: center; color: var(--fg2); }
+:is(.v-mini.soundonly, .v-mini .mghost.soundonly) .ctl, :is(.v-mini.soundonly, .v-mini .mghost.soundonly) .prog { display: none; }
+:is(.v-mini.soundonly, .v-mini .mghost.soundonly) .art, .cover.snd { display: grid; place-items: center; color: var(--fg2); }
 .player.soundonly :is(.ctl, .prog) { display: none; }
 
 /* black island (solid, dark): the equalizer bars are white */
@@ -1148,13 +1148,17 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; line-height: 1.
 :is(.mood-call .eyes, .eyes.e-call) .eye { animation: callListen 1.6s ease-in-out infinite; }
 :is(.mood-call .eyes, .eyes.e-call) .eye + .eye { animation-delay: .08s; }
 @keyframes callListen { 0%, 100% { transform: none; } 22% { transform: translateY(1.5px) scaleY(.72); } 45% { transform: translateY(-.5px); } 70% { transform: translateY(1px) scaleY(.85); } }
-.fx-call { right: -15px; top: -9px; color: var(--eye); font-style: normal; }
-.fx-call svg { display: block; animation: callRing 2.4s ease-in-out infinite; }
-.fx-call b { position: absolute; left: 8px; top: -2px; width: 6px; height: 6px; border: 1.5px solid currentColor; border-left-color: transparent; border-bottom-color: transparent; border-radius: 50%; opacity: 0; }
-.fx-call b + b { left: 9px; top: -5px; width: 10px; height: 10px; }
-:is(.mood-call .eyes, .eyes.e-call) .fx-call { opacity: 1; }
-:is(.mood-call .eyes, .eyes.e-call) .fx-call b { animation: callWave 1.3s ease-out infinite; }
-:is(.mood-call .eyes, .eyes.e-call) .fx-call b + b { animation-delay: .35s; }
+/* a small green badge with a white handset at the top-right, outside the face: it reads on any skin
+   (it used to sit in the middle above the eyes, inside the ghost's body, green on white) */
+.fx > i.fx-call { left: auto; right: -17px; top: -12px; width: 13px; height: 13px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--eye); color: #fff; font-style: normal; box-shadow: 0 0 0 1.5px rgba(0, 0, 0, .45), 0 0 8px var(--eyeGlow); }
+:is(.char-cat, .char-bunny, .char-robot, .char-ghost, .char-alien, .char-angel, .char-frog, .char-devil) .fx > i.fx-call { right: -25px; }
+.fx-call svg { display: block; width: 8px; height: 8px; animation: callRing 2.4s ease-in-out infinite; }
+.fx-call b { position: absolute; left: 11px; top: -3px; width: 6px; height: 6px; border: 1.5px solid var(--eye); border-left-color: transparent; border-bottom-color: transparent; border-radius: 50%; opacity: 0; }
+.fx-call b + b { left: 12px; top: -6px; width: 10px; height: 10px; }
+:is(:is(.mood-call .eyes, .eyes.e-call) .fx-call, .fx-call.hold) { opacity: 1; }
+:is(:is(.mood-call .eyes, .eyes.e-call) .fx-call, .fx-call.hold) b { animation: callWave 1.3s ease-out infinite; }
+:is(:is(.mood-call .eyes, .eyes.e-call) .fx-call, .fx-call.hold) b + b { animation-delay: .35s; }
 @keyframes callWave { 0% { opacity: 0; transform: scale(.6); } 35% { opacity: 1; } 100% { opacity: 0; transform: scale(1.15); } }
 @keyframes callRing { 0%, 100% { transform: rotate(0); } 8% { transform: rotate(-12deg); } 16% { transform: rotate(10deg); } 24% { transform: rotate(0); } }
 /* the face on the open island / in flight doesn't need its own copy (the effects layer has it) */
@@ -1194,15 +1198,15 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; line-height: 1.
 #stage.trick-lost .eyes:not(.fxl) .eye { animation: lostLook 2.7s cubic-bezier(.45, 0, .35, 1) !important; }
 @keyframes lostLook {
   0% { translate: var(--ex, 0px) var(--ey, 0px); }
-  8% { translate: calc(var(--lostDir, 1) * 3px) -1px; height: 19px; }      /* huh?! wide eyes, looks after it */
-  18% { translate: calc(var(--lostDir, 1) * 4px) 0; height: 17px; }
-  30% { translate: calc(var(--lostDir, 1) * -4px) 0; height: 11px; }       /* squints the other way */
-  42% { translate: calc(var(--lostDir, 1) * -4px) 0; height: 11px; }
-  54% { translate: calc(var(--lostDir, 1) * 4px) 0; height: 12px; }        /* back again */
-  62% { translate: calc(var(--lostDir, 1) * 4px) 0; height: 12px; }
-  70% { translate: 0 -1px; height: 16px; }                                 /* looks up... */
-  82% { translate: 0 2px; height: 9px; }                                   /* ...and gives up: a shrug */
-  92% { translate: 0 1px; height: 13px; }
+  8% { translate: calc(var(--ex, 0px) + calc(var(--lostDir, 1) * 3px)) calc(var(--ey, 0px) + -1px); height: 19px; }      /* huh?! wide eyes, looks after it */
+  18% { translate: calc(var(--ex, 0px) + calc(var(--lostDir, 1) * 4px)) var(--ey, 0px); height: 17px; }
+  30% { translate: calc(var(--ex, 0px) + calc(var(--lostDir, 1) * -4px)) var(--ey, 0px); height: 11px; }       /* squints the other way */
+  42% { translate: calc(var(--ex, 0px) + calc(var(--lostDir, 1) * -4px)) var(--ey, 0px); height: 11px; }
+  54% { translate: calc(var(--ex, 0px) + calc(var(--lostDir, 1) * 4px)) var(--ey, 0px); height: 12px; }        /* back again */
+  62% { translate: calc(var(--ex, 0px) + calc(var(--lostDir, 1) * 4px)) var(--ey, 0px); height: 12px; }
+  70% { translate: var(--ex, 0px) calc(var(--ey, 0px) + -1px); height: 16px; }                                 /* looks up... */
+  82% { translate: var(--ex, 0px) calc(var(--ey, 0px) + 2px); height: 9px; }                                   /* ...and gives up: a shrug */
+  92% { translate: var(--ex, 0px) calc(var(--ey, 0px) + 1px); height: 13px; }
   100% { translate: var(--ex, 0px) var(--ey, 0px); }
 }
 @keyframes lostLean {
@@ -1225,7 +1229,7 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; line-height: 1.
   78% { opacity: 1; transform: scale(1) rotate(8deg); }
   92%, 100% { opacity: 0; transform: scale(.5) rotate(20deg) translateY(-3px); }
 }
-@media (prefers-reduced-motion: reduce) { .trick-lost .eyes:not(.fxl), .trick-lost .eye { animation-duration: .01s; } }
+@media (prefers-reduced-motion: reduce) { .trick-lost .eyes:not(.fxl), #stage.trick-lost .eye { animation-duration: .01s; } }
 
 /* ================= hidden from the menu: a sad goodbye =================
    it droops for a moment, then floats up slowly (not the quick swipe-away) */
@@ -1236,11 +1240,962 @@ textarea.field { height: auto; padding: 10px 12px; resize: none; line-height: 1.
 @keyframes byeLook { 0% { translate: 0 1px; rotate: 0deg; } 30% { translate: 0 3px; rotate: -4deg; } 60% { translate: 0 3px; rotate: 4deg; } 100% { translate: 0 4px; rotate: 0deg; } }
 
 /* ================= eyes stay readable on every character, skin and emotion =================
-   a thin contrasting outline (dark on a dark island, light on a light one), so bright eyes
-   don't melt into aurora / holo / sunset glows */
-.eyes:not(.fxl) { filter: drop-shadow(0 0 1px rgba(0, 0, 0, .9)) drop-shadow(0 0 2.6px rgba(0, 0, 0, .5)); }
-:root[data-mode="light"] .eyes:not(.fxl), .mp[data-mode="light"] .eyes:not(.fxl) { filter: drop-shadow(0 0 1px rgba(255, 255, 255, .9)) drop-shadow(0 0 2.6px rgba(255, 255, 255, .5)); }
+   a soft contrasting glow behind them (dark on a dark island, light on a light one), no hard outline,
+   so bright eyes don't melt into aurora / holo / sunset glows */
+.eyes:not(.fxl) { filter: drop-shadow(0 0 3px rgba(0, 0, 0, .45)); }
+:root[data-mode="light"] .eyes:not(.fxl), .mp[data-mode="light"] .eyes:not(.fxl) { filter: drop-shadow(0 0 3px rgba(255, 255, 255, .55)); }
 /* the ghost's eyes sit on its white sheet: always dark, tinted by the emotion (sad - deep blue,
    angry - deep red...), instead of the emotion's light colour that vanished on white */
 .char-ghost .eyes:not(.fxl) { --eyeTint: var(--eye); filter: none; }
 .char-ghost .eyes:not(.fxl) .eye { --eye: color-mix(in srgb, var(--eyeTint) 22%, #0d0d1e); --eyeGlow: transparent; }
+
+/* locked: no subscription */
+.lockic { display: grid; place-items: center; width: 22px; height: 22px; flex: none; aspect-ratio: 1; border-radius: 50%; background: color-mix(in srgb, #ffcc00 22%, transparent); color: #ffcc00; }
+#stage.locked .v-compact { cursor: pointer; }
+
+/* ================= not signed in: it hides behind the pill's bottom edge =================
+   only the top of its head and eyes show over the edge, and the eyes follow the cursor.
+   After signing in it climbs out (.emerge) and lives as usual. */
+#stage:is(.signin, .emerge) .v-compact .mid { clip-path: inset(-40px -60px -4px -60px); } /* the edge: 6px above the pill's bottom, clear of the wavy rim */
+#stage.locked .v-compact .mid { margin-left: 26px; } /* a little further from the "sign in" text */
+#stage.signin .v-compact .mid .eyes:not(.fxl) { translate: 0 13px; transition: translate .7s cubic-bezier(.3, .7, .3, 1); }
+#stage.signin .v-compact .mid .eyes:not(.fxl) .eye { translate: calc(var(--ex, 0px) * 1.5) min(var(--ey, 0px), 0px); } /* follows you sideways and up, never ducks its eyes under the edge */
+/* climbs out: pushes up from behind the edge, a little hop over it, lands and settles */
+#stage.emerge .v-compact .mid .eyes:not(.fxl) { animation: climbOut 1.25s cubic-bezier(.3, .6, .3, 1) both !important; }
+@keyframes climbOut {
+  0% { translate: 0 13px; scale: 1 1; }
+  25% { translate: 0 11px; scale: 1.08 .9; }       /* gathers itself */
+  55% { translate: 0 -6px; scale: .92 1.1; }       /* hop out */
+  75% { translate: 0 1px; scale: 1.1 .88; }        /* lands */
+  88% { translate: 0 -1px; scale: .98 1.03; }
+  100% { translate: 0 0; scale: 1 1; }
+}
+@media (prefers-reduced-motion: reduce) { #stage.emerge .v-compact .mid .eyes:not(.fxl) { animation: none !important; } }
+
+/* the mini player's bar: easy to grab, grows under the finger */
+.v-mini .prog { cursor: pointer; padding: 5px 0; margin: 3px 0 -5px; } /* the whole row grabs the bar */
+.v-mini .prog .track.drag { height: 6px; }
+.v-mini .prog .track.drag, .v-mini .prog .track:hover { filter: brightness(1.2); }
+
+/* picking another activity: the old content melts away, the new one slides in from the edges */
+.v-compact .actghost { position: absolute; inset: 0; display: flex; align-items: center; justify-content: space-between; pointer-events: none; z-index: 2;
+  animation: actOut .32s ease-in both; }
+.v-compact .actghost .mid { visibility: hidden; }
+@keyframes actOut { to { opacity: 0; filter: blur(4px); transform: scale(.96); } }
+.v-compact.actswap > .side { animation: actIn .5s var(--spring) both; }
+.v-compact.actswap > .side:not(.r) { --from: -14px; }
+.v-compact.actswap > .side.r { --from: 14px; }
+@keyframes actIn { from { opacity: 0; transform: translateX(var(--from, 0)); filter: blur(4px); } }
+@media (prefers-reduced-motion: reduce) { .v-compact .actghost { animation-duration: .01s; } .v-compact.actswap > .side { animation: none; } }
+
+/* ================= the mini island for an activity ================= */
+:is(.v-mini.actv, .v-mini .mghost.actv) .mact { width: 58px; height: 58px; display: grid; place-items: center; flex: none; }
+:is(.v-mini.actv, .v-mini .mghost.actv) .mact .gtile { box-shadow: 0 6px 20px -8px var(--glow); }
+:is(.v-mini.actv, .v-mini .mghost.actv) .mact-call .callico { width: 50px; height: 50px; font-size: 18px; }
+:is(.v-mini.actv, .v-mini .mghost.actv) .mact-ic { position: relative; width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; background: var(--card2); color: var(--fg); }
+:is(.v-mini.actv, .v-mini .mghost.actv) .mact-ic.ok { border-radius: 50%; background: linear-gradient(145deg, #34c759, #1d9a46); color: #fff; box-shadow: 0 6px 20px -6px rgba(52, 199, 89, .7); animation: okPop .5s var(--spring) both; }
+@keyframes okPop { from { transform: scale(.6); opacity: 0; } }
+:is(.v-mini.actv, .v-mini .mghost.actv) .mact-ic.dl svg { animation: dlBob 1.4s ease-in-out infinite; }
+@keyframes dlBob { 50% { transform: translateY(3px); } }
+:is(.v-mini.actv, .v-mini .mghost.actv) .mact-ic.tm { border-radius: 50%; background: conic-gradient(var(--glow) calc(var(--p, 1) * 360deg), var(--card2) 0); }
+:is(.v-mini.actv, .v-mini .mghost.actv) .mact-ic.tm::before { content: ""; position: absolute; inset: 4px; border-radius: 50%; background: var(--base, #0b0b0f); }
+:is(.v-mini.actv, .v-mini .mghost.actv) .mact-ic.tm svg { position: relative; }
+:is(.v-mini.actv, .v-mini .mghost.actv) .mbig { font-size: 24px; font-weight: 300; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
+:is(.v-mini.actv, .v-mini .mghost.actv) .mnote2 { margin-top: 5px; font: 11px/1.3 "Cascadia Code", Consolas, monospace; color: var(--fg3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+:is(.v-mini.actv, .v-mini .mghost.actv) .mbar { margin-top: 8px; height: 4px; border-radius: 4px; background: var(--card2); overflow: hidden; position: relative; }
+:is(.v-mini.actv, .v-mini .mghost.actv) .mbar i { position: absolute; top: 0; bottom: 0; width: 35%; border-radius: 4px; background: var(--glow); animation: mbarRun 1.3s ease-in-out infinite; }
+@keyframes mbarRun { from { left: -35%; } to { left: 100%; } }
+:is(.v-mini.actv, .v-mini .mghost.actv) .ctl .cbtn { background: var(--card); }
+:is(.v-mini.actv, .v-mini .mghost.actv) .ctl .cbtn.muted { background: color-mix(in srgb, var(--bad, #ff5b4f) 25%, var(--card)); color: var(--bad, #ff5b4f); }
+:is(.v-mini.actv, .v-mini .mghost.actv) .ctl .cbtn.hang { background: #ff3b30; color: #fff; }
+
+/* the mini island switching to another thing: the old content melts, the new one comes in */
+.v-mini .mghost { position: absolute; inset: 0; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; padding: 12px 16px; pointer-events: none; z-index: 2;
+  animation: mOut .3s ease-in both; }
+.v-mini .mghost.sum { display: flex; justify-content: space-evenly; gap: 14px; padding: 0 18px; }
+@keyframes mOut { to { opacity: 0; filter: blur(5px); transform: scale(.97); } }
+.v-mini.mswap > :not(.mghost) { animation: mIn .5s var(--spring) both; }
+.v-mini.mswap > :not(.mghost):nth-child(2) { animation-delay: .05s; }
+.v-mini.mswap > :not(.mghost):nth-child(3) { animation-delay: .1s; }
+@keyframes mIn { from { opacity: 0; transform: translateY(6px) scale(.98); filter: blur(4px); } }
+@media (prefers-reduced-motion: reduce) { .v-mini .mghost { animation-duration: .01s; } .v-mini.mswap > * { animation: none; } }
+
+/* ================= a game is running: its own look (not a player) =================
+   focused violet "gamer" eyes that still follow the cursor, now and then a quick button-mash
+   twitch, a small gamepad badge outside the face, and a slow RGB glow around the island */
+:is(.mood-game .eyes, .eyes.e-game) { --eye: #c084fc; --eyeGlow: rgba(192, 132, 252, .6); }
+:is(:root[data-mode="light"] #stage, .mp[data-mode="light"]) :is(.mood-game .eyes, .eyes.e-game) { --eye: #9333ea; }
+:is(.mood-game .eyes, .eyes.e-game) .eye { height: 10px; width: 6px; border-radius: 2px 2px 3.5px 3.5px; animation: gameMash 3.4s ease-in-out infinite; }
+:is(.mood-game .eyes, .eyes.e-game) .eye + .eye { animation-delay: .07s; }
+@keyframes gameMash { 0%, 62%, 100% { scale: 1; } 66% { scale: 1.12 .8; } 70% { scale: 1; } 74% { scale: 1.12 .8; } 78% { scale: 1; } 84% { scale: .9 1.15; } 90% { scale: 1; } }
+.fx > i.fx-game { left: auto; right: -17px; top: -12px; width: 13px; height: 13px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--eye); color: #fff; font-style: normal; box-shadow: 0 0 0 1.5px rgba(0, 0, 0, .45), 0 0 8px var(--eyeGlow); }
+:is(.char-cat, .char-bunny, .char-robot, .char-ghost, .char-alien, .char-angel, .char-frog, .char-devil) .fx > i.fx-game { right: -25px; }
+.fx-game svg { display: block; width: 9px; height: 9px; animation: gameWiggle 3.4s ease-in-out infinite; }
+:is(:is(.mood-game .eyes, .eyes.e-game) .fx-game, .fx-game.hold) { opacity: 1; }
+@keyframes gameWiggle { 0%, 62%, 100% { transform: none; } 66% { transform: rotate(-14deg); } 72% { transform: rotate(12deg); } 78% { transform: none; } }
+:is(.v-open, .traveller) .eyes > .fx .fx-game { display: none; }
+
+#stage.ongame:not(.oncall) #island::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: -1;
+  animation: gameRGB 6s linear infinite;
+}
+@keyframes gameRGB {
+  0%, 100% { box-shadow: 0 0 0 1.5px rgba(192, 132, 252, .55), 0 0 16px -3px rgba(192, 132, 252, .55); }
+  33% { box-shadow: 0 0 0 1.5px rgba(56, 189, 248, .55), 0 0 16px -3px rgba(56, 189, 248, .55); }
+  66% { box-shadow: 0 0 0 1.5px rgba(244, 114, 182, .55), 0 0 16px -3px rgba(244, 114, 182, .55); }
+}
+.gameapp { display: inline-flex; align-items: center; gap: 7px; font-weight: 650; min-width: 0; }
+.gameico { width: 22px; height: 22px; border-radius: 6px; object-fit: contain; flex: none; display: grid; place-items: center; }
+.gameico.fallback { background: linear-gradient(145deg, #a855f7, #6366f1); color: #fff; }
+.bubble .bubble-glogo { width: 70%; height: 70%; object-fit: contain; display: grid; place-items: center; }
+/* a game's logo fills the round droplet like the other logos (Rust's own icon is a square tile) */
+.bubble img.bubble-glogo { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; clip-path: circle(50%); }
+.gameapp { flex: 0 1 auto; }
+.bubble .bubble-glogo.fallback { border-radius: 50%; background: linear-gradient(145deg, #a855f7, #6366f1); color: #fff; }
+.bubble.game { box-shadow: 0 0 0 2px rgba(192, 132, 252, .6), 0 0 14px -4px rgba(192, 132, 252, .8); }
+:is(.v-mini.actv, .v-mini .mghost.actv) .mact-game .gameico { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; filter: drop-shadow(0 6px 14px rgba(168, 85, 247, .45)); }
+@media (prefers-reduced-motion: reduce) { #stage.ongame #island::before, :is(.mood-game .eyes, .eyes.e-game) .eye, .fx-game svg { animation: none; } }
+
+/* ================= a task is done: one clean, happy hop =================
+   (replaces the stacked joy layers: four jumps + a spinning dance + rings + bubbles at once)
+   the eyes squint into happy arcs, crouch, hop once and land with a little squash; a green
+   badge with a tick pops up beside the face and the tick draws itself; one soft glow from the island */
+:is(.mood-done .eyes, .eyes.e-done) { --eye: #6ee7a0; --eyeGlow: rgba(52, 211, 120, .7); }
+/* stronger than the skins' own idle motion (the ghost's float) */
+:is(#stage.mood-done .eyes:not(.fxl), #stage .eyes.e-done:not(.fxl), .eyes.e-done) { animation: doneHop 1s cubic-bezier(.3, .7, .35, 1) 1 both; }
+:is(:root[data-mode="light"] #stage, .mp[data-mode="light"]) :is(.mood-done .eyes, .eyes.e-done) { --eye: #16a34a; }
+:is(.mood-done .eyes, .eyes.e-done) .eye { width: 9px; height: 6px; background: transparent; border: 2.8px solid var(--eye); border-bottom: 0; border-radius: 9px 9px 0 0; translate: 0 -1px; animation: none; }
+@keyframes doneHop {
+  0% { translate: 0 0; scale: 1; }
+  16% { translate: 0 1.5px; scale: 1.14 .8; }
+  44% { translate: 0 -7px; scale: .94 1.08; }
+  66% { translate: 0 0; scale: 1.1 .88; }
+  82% { translate: 0 -1px; scale: .98 1.02; }
+  100% { translate: 0 0; scale: 1; }
+}
+.fx > i.fx-done { left: auto; right: -17px; top: -12px; width: 13px; height: 13px; border-radius: 50%; display: grid; place-items: center;
+  background: #22c55e; color: #fff; font-style: normal; box-shadow: 0 0 0 1.5px rgba(0, 0, 0, .45), 0 0 9px rgba(52, 211, 120, .7); scale: .3; }
+:is(.char-cat, .char-bunny, .char-robot, .char-ghost, .char-alien, .char-angel, .char-frog, .char-devil) .fx > i.fx-done { right: -25px; }
+.fx-done svg path { stroke-dasharray: 1; stroke-dashoffset: 1; }
+:is(:is(.mood-done .eyes, .eyes.e-done) .fx-done, .fx-done.hold) { opacity: 1; animation: donePop .55s .3s var(--spring) both; }
+:is(:is(.mood-done .eyes, .eyes.e-done) .fx-done, .fx-done.hold) svg path { animation: doneTick .35s .55s ease-out forwards; }
+@keyframes donePop { 0% { scale: .3; opacity: 0; } 60% { scale: 1.2; opacity: 1; } 100% { scale: 1; opacity: 1; } }
+@keyframes doneTick { to { stroke-dashoffset: 0; } }
+:is(.v-open, .traveller) .eyes > .fx .fx-done { display: none; }
+#stage.mood-done:not(.oncall) #island::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: -2;
+  animation: doneGlow 1.3s .35s ease-out 1 both;
+}
+@keyframes doneGlow { 0% { box-shadow: 0 0 0 0 rgba(52, 211, 120, .55); } 100% { box-shadow: 0 0 0 12px rgba(52, 211, 120, 0); } }
+@media (prefers-reduced-motion: reduce) { :is(.mood-done .eyes, .eyes.e-done), :is(:is(.mood-done .eyes, .eyes.e-done) .fx-done, .fx-done.hold), #stage.mood-done #island::after { animation: none; } :is(:is(.mood-done .eyes, .eyes.e-done) .fx-done, .fx-done.hold) { scale: 1; } .fx-done svg path { stroke-dashoffset: 0; } }
+
+/* ================= surprise: a message came in =================
+   the eyes pop open into round "O"s, the face jerks back and up, then leans toward the message
+   and settles; a little blue speech-bubble badge pops up beside the face */
+:is(.mood-surprise .eyes, .eyes.e-surprise) { --eye: #ffffff; --eyeGlow: rgba(130, 190, 255, .65); }
+:is(:root[data-mode="light"] #stage, .mp[data-mode="light"]) :is(.mood-surprise .eyes, .eyes.e-surprise) { --eye: #111118; --eyeGlow: rgba(60, 120, 255, .25); }
+:is(.mood-surprise .eyes, .eyes.e-surprise) .eye { width: 8px; height: 10px; border-radius: 50%; animation: surpriseEye 1.6s cubic-bezier(.3, .7, .35, 1) 1 both; }
+:is(#stage.mood-surprise .eyes:not(.fxl), #stage .eyes.e-surprise:not(.fxl), .eyes.e-surprise) { animation: surpriseJump 1.6s cubic-bezier(.3, .7, .35, 1) 1 both; }
+@keyframes surpriseJump {
+  0% { translate: 0 0; scale: 1; rotate: 0deg; }
+  10% { translate: 0 -5px; scale: .9 1.18; rotate: 0deg; }
+  22% { translate: 0 -3px; scale: 1.06 .96; }
+  34% { translate: 0 -3px; scale: 1; rotate: -6deg; }
+  60% { translate: 2px 0; rotate: 4deg; }
+  80% { translate: 0 0; rotate: 0deg; }
+  100% { translate: 0 0; scale: 1; rotate: 0deg; }
+}
+@keyframes surpriseEye {
+  0% { scale: .6 .4; }
+  10% { scale: 1.25; }
+  22% { scale: 1; }
+  48% { scale: 1; }
+  52% { scale: 1 .15; } /* a double blink: "wait, what?" */
+  56% { scale: 1; }
+  60% { scale: 1 .15; }
+  64%, 100% { scale: 1; }
+}
+.fx > i.fx-msg { left: auto; right: -17px; top: -13px; width: 15px; height: 12px; border-radius: 6px 6px 6px 2px; display: grid; place-items: center;
+  background: #3b82f6; color: #fff; font-style: normal; box-shadow: 0 0 0 1.5px rgba(0, 0, 0, .45), 0 0 9px rgba(59, 130, 246, .7); scale: .3; }
+:is(.char-cat, .char-bunny, .char-robot, .char-ghost, .char-alien, .char-angel, .char-frog, .char-devil) .fx > i.fx-msg { right: -26px; }
+.fx-msg b { width: 2px; height: 2px; border-radius: 50%; background: currentColor; display: inline-block; margin: 0 .6px; }
+.fx-msg { display: flex !important; align-items: center; justify-content: center; }
+:is(:is(.mood-surprise .eyes, .eyes.e-surprise) .fx-msg, .fx-msg.hold) { opacity: 1; animation: msgPop .5s .08s var(--spring) both; }
+:is(:is(.mood-surprise .eyes, .eyes.e-surprise) .fx-msg, .fx-msg.hold) b { animation: msgDot 1s .4s ease-in-out infinite; }
+:is(:is(.mood-surprise .eyes, .eyes.e-surprise) .fx-msg, .fx-msg.hold) b:nth-child(2) { animation-delay: .55s; }
+:is(:is(.mood-surprise .eyes, .eyes.e-surprise) .fx-msg, .fx-msg.hold) b:nth-child(3) { animation-delay: .7s; }
+@keyframes msgPop { 0% { scale: .3; opacity: 0; translate: -6px 6px; } 60% { scale: 1.2; opacity: 1; } 100% { scale: 1; opacity: 1; translate: 0 0; } }
+@keyframes msgDot { 0%, 100% { translate: 0 0; } 30% { translate: 0 -1.5px; } }
+:is(.v-open, .traveller) .eyes > .fx .fx-msg { display: none; }
+@media (prefers-reduced-motion: reduce) { :is(.mood-surprise .eyes, .eyes.e-surprise), :is(.mood-surprise .eyes, .eyes.e-surprise) .eye, .fx-msg, .fx-msg b { animation: none !important; } .fx-msg { scale: 1; } }
+
+/* ---------- a message toast: avatar + app badge, name, the text in a chat bubble ---------- */
+.v-toast.msg { align-items: center; }
+.v-toast.msg .ti { position: relative; overflow: visible; border-radius: 50%; width: 42px; height: 42px; }
+.v-toast.msg .mav { width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; background-size: cover; background-position: center;
+  color: #fff; font-weight: 700; font-size: 18px; box-shadow: 0 2px 10px -4px rgba(0, 0, 0, .6); animation: mavIn .5s var(--spring) both; }
+.v-toast.msg .mbadge { position: absolute; right: -3px; bottom: -3px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
+  background: center/cover no-repeat var(--card2); box-shadow: 0 0 0 2.5px #000; animation: mbadgeIn .45s .18s var(--spring) both; }
+.v-toast.msg .mbadge.tg { background: linear-gradient(145deg, #3fb0ef, #1f8fd6); color: #fff; }
+.v-toast.msg .mbadge.tg .ic { transform: translateX(-.5px); }
+.v-toast.msg .mhead { display: flex; align-items: baseline; gap: 6px; min-width: 0; margin: 0 0 3px 2px; }
+.v-toast.msg .mhead b { font-size: 13.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v-toast.msg .mwhere { font-size: 11.5px; color: var(--fg3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.v-toast.msg .mcount { flex: none; margin-left: auto; min-width: 17px; height: 17px; padding: 0 5px; border-radius: 9px; background: #2ea6ff; color: #fff;
+  font-size: 10.5px; font-weight: 700; display: grid; place-items: center; animation: mbadgeIn .35s var(--spring) both; }
+.v-toast.msg .mbub { position: relative; width: fit-content; max-width: 100%; padding: 6px 11px 7px; border-radius: 15px 15px 15px 5px;
+  background: rgba(255, 255, 255, .1); font-size: 12.8px; line-height: 1.32; color: var(--fg);
+  display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere;
+  transform-origin: 0 100%; animation: mbubIn .5s .08s var(--spring) both; }
+.v-toast.msg .mbub.bump { animation: mbubBump .45s var(--spring) both; }
+@keyframes mavIn { from { transform: scale(.4); opacity: 0; } }
+@keyframes mbadgeIn { from { transform: scale(0); } }
+@keyframes mbubIn { from { transform: scale(.6) translateY(4px); opacity: 0; } }
+@keyframes mbubBump { 40% { transform: scale(1.06); } }
+.v-toast.msg .mrow { display: flex; align-items: flex-end; gap: 6px; min-width: 0; }
+.v-toast.msg .mrow .mbub { flex: 0 1 auto; min-width: 0; }
+.v-toast.msg .mreply { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; padding: 0; border: 0; cursor: pointer;
+  color: #fff; background: linear-gradient(145deg, #3fb0ef, #1f8fd6); box-shadow: 0 4px 14px -6px rgba(46, 166, 255, .9), inset 0 1px 0 rgba(255, 255, 255, .25);
+  transition: transform .3s var(--spring), filter .2s; animation: mbadgeIn .45s .25s var(--spring) both; }
+.v-toast.msg .mreply:hover { transform: scale(1.12) rotate(-8deg); filter: brightness(1.12); }
+.v-toast.msg .mreply:active { transform: scale(.92); }
+.v-toast.msg .tact:empty { display: none; }
+.v-toast.msg .mbub { box-sizing: border-box; }
+.v-toast.msg .mrow .mbub { flex: none; max-width: none; } /* its width is measured from the text plus its padding (renderToast), so the rounded end always shows */
+
+/* ---------- a finished download: the file's own icon with a green tick ---------- */
+.v-toast.dldone .ti { position: relative; overflow: visible; }
+.v-toast.dldone .dlfile { width: 40px; height: 40px; display: grid; place-items: center; background: center/contain no-repeat; animation: mavIn .5s var(--spring) both; }
+.v-toast.dldone .dlfile.gen { border-radius: 12px; background: var(--card2); color: var(--fg2); }
+.v-toast.dldone .dltick { position: absolute; right: -4px; bottom: -4px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
+  background: linear-gradient(145deg, #43d17a, #1fae5b); color: #fff; box-shadow: 0 0 0 2.5px #000; animation: mbadgeIn .45s .2s var(--spring) both; }
+.v-toast.dldone .tapp { color: #43d17a; }
+.v-toast.dldone .tact .btn { display: inline-flex; align-items: center; gap: 5px; }
+:is(.v-mini.actv, .v-mini .mghost.actv) .mbar.det i { position: relative; left: 0; animation: none; transition: width .6s ease; }
+
+/* the game badge: the game's own logo in a little round frame that floats beside the face */
+#stage.gamelogo .fx > i.fx-game { width: 17px; height: 17px; top: -14px; right: -20px; background: var(--gamelogo) center / cover no-repeat, #111;
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, .85), 0 3px 10px -2px rgba(0, 0, 0, .7); animation: gameBadgeFloat 3.2s ease-in-out infinite; }
+#stage.gamelogo :is(.char-cat, .char-bunny, .char-robot, .char-ghost, .char-alien, .char-angel, .char-frog, .char-devil) .fx > i.fx-game { right: -28px; }
+#stage.gamelogo .fx-game svg { display: none; }
+@keyframes gameBadgeFloat { 0%, 100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-2px) rotate(4deg); } }
+@media (prefers-reduced-motion: reduce) { #stage.gamelogo .fx > i.fx-game { animation: none; } }
+
+/* ---------- message banner v2: like an iPhone banner, the face apart on the right ---------- */
+.v-toast.msg { gap: 12px; padding: 10px 10px 10px 14px; cursor: pointer; }
+.v-toast.msg .mhead { margin: 0 0 1px; }
+.v-toast.msg .mbub { background: none; padding: 0; border-radius: 0; color: var(--fg2); font-size: 12.8px; line-height: 17px; animation: mtextIn .45s .06s cubic-bezier(.2, .8, .2, 1) both; }
+.v-toast.msg .mbub.bump { animation: mtextIn .35s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes mtextIn { from { opacity: 0; transform: translateY(5px); filter: blur(2px); } }
+.v-toast.msg .teyes { width: 46px; align-self: stretch; margin-left: auto; border-left: 1px solid var(--line); padding-left: 8px; }
+.v-toast.msg:hover .mhead b { text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--fg) 35%, transparent); text-underline-offset: 3px; }
+
+/* ---------- quick chat: a small Telegram chat inside the island ---------- */
+.v-qchat { display: flex; flex-direction: column; padding: 12px 12px 12px; gap: 8px; }
+.qhead { display: flex; align-items: center; gap: 10px; flex: none; padding: 0 2px; }
+.qav { width: 34px; height: 34px; border-radius: 50%; flex: none; background: center/cover no-repeat #65aadd; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 15px; }
+.qname { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+.qname b { font-size: 14px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qname small { font-size: 11px; color: #4fb3ff; }
+.qmsgs { flex: 1; min-height: 60px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; padding: 2px 4px 2px 2px; scrollbar-width: thin; }
+.qm { position: relative; align-self: flex-start; max-width: 82%; padding: 6px 10px 6px; border-radius: 16px 16px 16px 6px; background: var(--card2); font-size: 13px; line-height: 1.35; word-break: break-word; white-space: pre-wrap;
+  animation: qmIn .35s cubic-bezier(.2, .8, .2, 1) both; cursor: context-menu; }
+.qm.cont { border-top-left-radius: 6px; margin-top: -1px; }
+.qm.out { align-self: flex-end; border-radius: 16px 16px 6px 16px; background: linear-gradient(145deg, #3e8ef7, #2b6fd6); color: #fff; }
+.qm.out.cont { border-top-right-radius: 6px; }
+.qm:not(.cont) { margin-top: 4px; }
+.qtime { float: right; margin: 5px 0 -3px 8px; font-size: 10px; opacity: .55; font-variant-numeric: tabular-nums; }
+.qq { border-left: 2px solid currentColor; padding-left: 6px; margin-bottom: 3px; font-size: 11.5px; opacity: .7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+@keyframes qmIn { from { opacity: 0; transform: translateY(6px) scale(.97); } }
+.qempty { margin: auto; color: var(--fg3); font-size: 12.5px; }
+.qload { margin: auto; display: flex; gap: 5px; }
+.qload i { width: 7px; height: 7px; border-radius: 50%; background: var(--fg3); animation: qdot 1s infinite ease-in-out; }
+.qload i:nth-child(2) { animation-delay: .15s; } .qload i:nth-child(3) { animation-delay: .3s; }
+@keyframes qdot { 0%, 100% { opacity: .3; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-3px); } }
+.qreply { display: none; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 12px; background: var(--card); color: #4fb3ff; flex: none; }
+.qreply.on { display: flex; animation: qmIn .25s ease both; }
+.qrt { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+.qrt b { font-size: 11.5px; } .qrt span { font-size: 12px; color: var(--fg2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qbar { display: flex; align-items: flex-end; gap: 8px; flex: none; }
+.qin { flex: 1; min-height: 36px; max-height: 84px; resize: none; border: 1px solid var(--line); border-radius: 18px; padding: 8px 14px; background: var(--card); color: var(--fg); font: inherit; font-size: 13px; line-height: 18px; outline: none; transition: border-color .2s, box-shadow .2s; }
+.qin:focus { border-color: color-mix(in srgb, #3e8ef7 60%, var(--line)); box-shadow: 0 0 0 3px rgba(62, 142, 247, .18); }
+.qsend { width: 36px; height: 36px; flex: none; border: 0; border-radius: 50%; display: grid; place-items: center; color: #fff; background: linear-gradient(145deg, #3fb0ef, #1f8fd6); cursor: pointer; transition: transform .25s var(--spring), filter .2s; }
+.qsend:hover { transform: scale(1.08); filter: brightness(1.1); }
+.qsend:active { transform: scale(.92); }
+.qmenu { position: absolute; z-index: 60; min-width: 150px; padding: 5px; border-radius: 14px; background: var(--base2, #1c1c22); border: 1px solid var(--line); box-shadow: 0 14px 40px -12px rgba(0, 0, 0, .8); animation: qmIn .18s ease both; }
+.qmi { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 10px; border: 0; border-radius: 9px; background: none; color: var(--fg); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.qmi:hover { background: var(--card2); }
+.qmsgs::-webkit-scrollbar { width: 4px; } .qmsgs::-webkit-scrollbar-track { background: none; } .qmsgs::-webkit-scrollbar-button { display: none; height: 0; }
+.qmsgs::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--fg) 18%, transparent); border-radius: 4px; }
+
+/* ---------- light island: the character turns over too ---------- */
+:root[data-mode="light"] #stage.char-ghost .deco i:nth-child(1), .mp[data-mode="light"] .char-ghost .deco i:nth-child(1), .char-ghost .mp[data-mode="light"] .deco i:nth-child(1) {
+  background: rgba(30, 30, 44, .92); box-shadow: 0 0 12px rgba(30, 30, 60, .35); }
+:root[data-mode="light"] #stage.char-alien:not([class*="mood-"]) .eyes, .char-alien .mp[data-mode="light"] .eyes { --eye: #1f9d3a; --eyeGlow: rgba(30, 160, 60, .35); }
+:root[data-mode="light"] #stage.char-devil:not([class*="mood-"]) .eyes, .char-devil .mp[data-mode="light"] .eyes { --eye: #c81e1e; --eyeGlow: rgba(200, 30, 30, .3); }
+:root[data-mode="light"] .buddy, .mp[data-mode="light"] .buddy { filter: brightness(.55) saturate(1.2); }
+:root[data-mode="light"] .buddy .eyes { --eye: #fff; }
+/* the ghost's eyes are tinted dark on its white sheet; on a light island the sheet is dark, so the eyes go light */
+:root[data-mode="light"] #stage.char-ghost .eyes:not(.fxl) .eye, .char-ghost .mp[data-mode="light"] .eyes .eye, .mp[data-mode="light"] .char-ghost .eyes .eye { --eye: color-mix(in srgb, var(--eyeTint, #fff) 22%, #f4f4ff); }
+
+/* ---------- thinking marks stay readable on a character with a body ---------- */
+/* a soft dark glow behind the spinner, the orbiting dots and the "busy" dots, so they never melt into a light body */
+.fx :is(.fx-load, .fx-orbit, .fx-dots, .fx-dots3, .fx-q, .fx-bulb) { filter: drop-shadow(0 0 3px rgba(0, 0, 0, .4)); } /* a soft dark glow, no hard outline */
+:root[data-mode="light"] .fx :is(.fx-load, .fx-orbit, .fx-dots, .fx-dots3, .fx-q, .fx-bulb) { filter: drop-shadow(0 0 3px rgba(255, 255, 255, .55)); }
+/* the ghost's sheet covers the space above the eyes: its thoughts float beside it, like a thought bubble, in a deeper colour */
+#stage.char-ghost .fx :is(.fx-load, .fx-orbit, .fx-q, .fx-dots3) { translate: 21px 6px; }
+#stage.char-ghost .fx .fx-dots { translate: 23px 8px; }
+#stage.char-ghost:not(.eyecol-all) .fx :is(.fx-load, .fx-orbit, .fx-dots, .fx-dots3) { --eye: #8b7cff; --eyeGlow: rgba(124, 92, 255, .55); }
+:root[data-mode="light"] #stage.char-ghost .fx :is(.fx-load, .fx-orbit, .fx-dots, .fx-dots3) { --eye: #5b4bd6; }
+/* the message text never leaves the island: at most 6 lines, a soft fade if there is more */
+.v-toast.msg .tb { overflow: hidden; }
+.v-toast.msg .mbub { display: block; max-height: calc(17px * 6); overflow: hidden; overflow-wrap: anywhere; word-break: break-word; }
+.v-toast.msg .mbub.cut { -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 14px), transparent); mask-image: linear-gradient(180deg, #000 calc(100% - 14px), transparent); }
+
+/* voice message in the banner */
+.v-toast.msg .mvoice { --vp: 0; display: flex; align-items: center; gap: 9px; min-width: 0; flex: 1; }
+.v-toast.msg .mplay { width: 30px; height: 30px; flex: none; border: 0; border-radius: 50%; display: grid; place-items: center; color: #fff; cursor: pointer;
+  background: linear-gradient(145deg, #3fb0ef, #1f8fd6); box-shadow: 0 4px 12px -5px rgba(46, 166, 255, .9); transition: transform .25s var(--spring); }
+.v-toast.msg .mplay:hover { transform: scale(1.08); }
+.v-toast.msg .mplay:active { transform: scale(.92); }
+.v-toast.msg .mplay.load { animation: mplayLoad 1s linear infinite; }
+@keyframes mplayLoad { 50% { opacity: .5; } }
+.v-toast.msg .mwave { position: relative; flex: 1; min-width: 0; height: 18px; display: flex; align-items: center; gap: 2px; overflow: hidden; }
+.v-toast.msg .mwave i { flex: 1; min-width: 2px; max-width: 3px; border-radius: 2px; background: color-mix(in srgb, var(--fg) 30%, transparent); }
+.v-toast.msg .mwave .mprog { position: absolute; inset: 0; width: calc(var(--vp) * 100%); background: linear-gradient(90deg, rgba(79, 179, 255, .55), rgba(79, 179, 255, .55)); mix-blend-mode: screen; border-radius: 3px; pointer-events: none; transition: width .25s linear; }
+.v-toast.msg .mtime { flex: none; font-size: 11.5px; color: var(--fg2); font-variant-numeric: tabular-nums; }
+.v-toast.msg .mkind { flex: none; font-size: 10.5px; color: var(--fg3); }
+/* a trick holds its last pose until the face glides back (otherwise it snapped home a moment before the glide) */
+#stage[class*="trick-"] :is(.eyes, .eye) { animation-fill-mode: both; }
+
+/* message banner v3: the name with the count beside it, the text in a bubble right under it,
+   no divider line, and the face sitting at the island's right edge */
+.v-toast.msg { padding: 10px 6px 10px 14px; gap: 12px; }
+.v-toast.msg .mhead { justify-content: flex-start; margin: 0 0 4px 2px; }
+.v-toast.msg .mcount { margin-left: 0; order: 2; }
+.v-toast.msg .mwhere { order: 3; }
+.v-toast.msg .mbub { display: block; width: fit-content; max-width: 100%; padding: 6px 11px 7px; border-radius: 4px 15px 15px 15px; background: rgba(255, 255, 255, .1);
+  color: var(--fg); line-height: 17px; animation: mbubIn .5s .08s var(--spring) both; transform-origin: 0 0; }
+:root[data-mode="light"] .v-toast.msg .mbub { background: rgba(0, 0, 0, .07); }
+.v-toast.msg .mbub.bump { animation: mbubBump .45s var(--spring) both; }
+.v-toast.msg .teyes { border-left: 0; padding-left: 0; width: 40px; margin-left: auto; margin-right: 2px; }
+.v-toast.msg .mvoice { padding: 4px 10px 4px 4px; border-radius: 4px 18px 18px 18px; background: rgba(255, 255, 255, .1); }
+
+/* thinking, busy and bored marks sit a little closer to the face (all characters but the ghost, which has its own spot) */
+#stage:not(.char-ghost) .fx :is(.fx-load, .fx-orbit, .fx-q) { translate: -2px 3px; }
+#stage:not(.char-ghost) .fx :is(.fx-dots, .fx-dots3) { translate: -3px 2px; }
+
+/* notifications: the character sits right at the island's right edge (5px away);
+   with no character its place goes to the text, and switching glides instead of jumping */
+.v-toast { padding-right: 5px; transition: padding .45s var(--spring); }
+.v-toast.msg { padding-right: 5px; max-width: none; border-radius: inherit; } /* the AI chat's generic .msg (max-width 88%) must not narrow the banner */
+.v-toast .tact:empty { display: none; }
+.v-toast .teyes, .v-toast.msg .teyes { box-sizing: border-box; width: calc(20px + var(--fl, 0px) + var(--fr, 0px)); padding: 0 var(--fr, 0px) 0 var(--fl, 0px);
+  /* inside the island's round end, not poking into its curve: the face is centred a little toward the edge of that half-circle */
+  margin-right: max(2px, calc(var(--r, 34px) - (20px + var(--fl, 0px) + var(--fr, 0px)) / 2 - 12px)); margin-left: auto; overflow: visible; display: grid; place-items: center;
+  transition: width .45s var(--spring), padding .45s var(--spring), opacity .3s, scale .45s var(--spring); }
+#stage.char-none .v-toast { padding-right: 16px; }
+#stage.char-none .v-toast .teyes { width: 0; padding: 0; margin-right: 0; opacity: 0; scale: .4; margin-left: -12px; }
+/* the character no longer pops out of existence when it is switched off: it fades and its slot closes */
+#stage.char-none .eyes.main { display: flex; opacity: 0; pointer-events: none; }
+.eyes:not(.fxl) { transition: transform .45s var(--spring), filter .6s ease, top .35s var(--spring), scale .55s cubic-bezier(.3, .7, .3, 1), opacity .35s; }
+.v-compact .mid { width: 20px; transition: width .45s var(--spring), margin .45s var(--spring); }
+#stage.char-none .v-compact .mid { width: 0; margin: 0 -5px; }
+.eyes:is(.mini-eyes, .flash-eyes):not(.fxl) { transition: transform .45s var(--spring), filter .6s ease, scale .55s cubic-bezier(.3, .7, .3, 1), top .35s var(--spring), opacity .3s, width .45s var(--spring), margin .45s var(--spring); }
+#stage.char-none .eyes:is(.mini-eyes, .flash-eyes):not(.fxl) { width: 0; margin: 0 -10px 0 0; }
+/* a notice with buttons: the face keeps clear of the last button */
+.v-toast:not(.msg) .teyes { margin-left: 10px; }
+
+/* quick chat: media in the bubbles */
+.qm.media { padding: 4px; white-space: normal; }
+.qm.media .qt { display: block; padding: 4px 6px 0; white-space: pre-wrap; }
+.qm.media .qtime { position: absolute; right: 9px; bottom: 6px; padding: 1px 5px; border-radius: 8px; background: rgba(0, 0, 0, .35); color: #fff; }
+.qm.media.k-voice .qtime, .qm.media.k-audio .qtime { position: static; background: none; color: inherit; padding: 0 4px; }
+.qvoice { --vp: 0; display: flex; align-items: center; gap: 8px; padding: 3px 6px 3px 3px; min-width: 190px; }
+.qplay { flex: none; width: 30px; height: 30px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer; color: #fff; background: #3e8ef7; transition: transform .2s var(--spring), filter .2s; }
+.qm.out .qplay { background: #fff; color: #2b6fd6; }
+.qplay:hover { transform: scale(1.08); filter: brightness(1.1); }
+.qvoice.load .qplay { animation: qpulse .8s ease-in-out infinite alternate; }
+@keyframes qpulse { to { opacity: .45; } }
+.qwave { position: relative; flex: 1; height: 20px; display: flex; align-items: center; gap: 2px; }
+.qwave i { flex: 1; max-width: 3px; min-width: 2px; border-radius: 2px; background: color-mix(in srgb, currentColor 35%, transparent); }
+.qwave::after { content: ''; position: absolute; inset: 0; width: calc(var(--vp) * 100%); background: color-mix(in srgb, #3e8ef7 55%, transparent); mix-blend-mode: screen; border-radius: 3px; pointer-events: none; transition: width .25s linear; }
+.qm.out .qwave::after { background: rgba(255, 255, 255, .5); }
+.qvoice.new .qvt::after { content: ''; display: inline-block; width: 6px; height: 6px; margin-left: 5px; border-radius: 50%; background: #3e8ef7; vertical-align: 1px; }
+.qvt { font-size: 11px; opacity: .75; font-variant-numeric: tabular-nums; }
+.qround { position: relative; width: 120px; height: 120px; border-radius: 50%; overflow: hidden; background: center/cover var(--card); cursor: pointer; }
+.qround-v { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .3s; }
+.qround.on .qround-v { opacity: 1; }
+.qround .qvt { position: absolute; left: 50%; bottom: 8px; translate: -50% 0; padding: 1px 6px; border-radius: 8px; background: rgba(0, 0, 0, .45); color: #fff; }
+.qrplay { position: absolute; left: 50%; top: 50%; translate: -50% -50%; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: rgba(0, 0, 0, .45); color: #fff; transition: opacity .25s, scale .25s var(--spring); pointer-events: none; }
+.qround.on .qrplay { opacity: 0; scale: .6; }
+.qround.load .qrplay { animation: qpulse .8s ease-in-out infinite alternate; }
+.qpic { width: 220px; max-width: 100%; border-radius: 12px; background: center/cover color-mix(in srgb, var(--fg) 8%, transparent); cursor: zoom-in; position: relative; opacity: .5; transition: opacity .35s, filter .2s; }
+.qpic.in { opacity: 1; }
+.qpic:hover { filter: brightness(1.08); }
+.qpic.st { width: 120px; background-size: contain; background-repeat: no-repeat; background-color: transparent; cursor: default; }
+.qpic.vid { cursor: pointer; }
+.qview { position: absolute; inset: 0; z-index: 5; border-radius: inherit; background: center/contain no-repeat #000; display: grid; place-items: center; cursor: zoom-out;
+  opacity: 0; scale: .96; transition: opacity .22s, scale .3s var(--spring); }
+.qview.in { opacity: 1; scale: 1; }
+.qview video { max-width: 100%; max-height: 100%; border-radius: inherit; cursor: default; }
+.qview .qvfail { color: #fff; opacity: .7; font-size: 13px; }
+
+/* message banner v4: a bigger avatar and face, the bold name with a round counter, the face in the
+   island's round end, the messenger's badge by the face; a long message is read line by line */
+.v-toast.msg { --fz: 1.45; padding: 12px 5px 12px 14px; gap: 13px; }
+.v-toast.msg .ti, .v-toast.msg .mav { width: 50px; height: 50px; }
+.v-toast.msg .mav { font-size: 20px; }
+.v-toast.msg .mbadge { width: 20px; height: 20px; right: -3px; bottom: -3px; }
+.v-toast.msg .mhead { align-items: center; gap: 6px; margin: 0 0 5px 2px; }
+.v-toast.msg .mhead b { font-size: 15px; font-weight: 800; letter-spacing: .1px; }
+.v-toast.msg .mcount { min-width: 19px; height: 19px; padding: 0 5px; border-radius: 10px; background: #4a80e8; font-size: 11px; font-weight: 800; line-height: 19px; display: grid; place-items: center; }
+.v-toast.msg .mbub { padding: 7px 12px 8px; border-radius: 14px; background: rgba(255, 255, 255, .12); font-weight: 500; }
+:root[data-mode="light"] .v-toast.msg .mbub { background: rgba(0, 0, 0, .07); }
+.v-toast.msg.long { align-items: flex-start; }
+.v-toast.msg.long .ti { margin-top: 1px; }
+/* the face's frame: its width is the character's (body included) at the banner's scale */
+.v-toast .teyes, .v-toast.msg .teyes { --tw: calc((20px + var(--fl, 0px) + var(--fr, 0px)) * var(--fz, 1)); position: relative; align-self: stretch;
+  width: var(--tw); padding: 0; display: block; margin-left: auto; margin-right: max(2px, calc(var(--r, 34px) - var(--tw) / 2 - 12px));
+  transition: width .45s var(--spring), margin .45s var(--spring), opacity .3s, scale .45s var(--spring); }
+.v-toast:not(.msg) .teyes { margin-left: 10px; }
+.v-toast .tface { position: absolute; width: 20px; height: 20px; scale: var(--fz, 1);
+  left: calc((var(--fl, 0px) + 10px) * var(--fz, 1) - 10px);
+  top: calc(var(--fpad, 2px) + var(--rp, .5) * (100% - 2 * var(--fpad, 2px) - 20px));
+  transition: top .75s cubic-bezier(.45, 0, .25, 1); }
+.v-toast.msg .tface { --fpad: 14px; }
+.v-toast .tface .eyes { margin: 0; }
+#stage.char-none .v-toast .teyes { width: 0; margin-right: 0; }
+/* where the message came from: a small badge popping up by the face */
+.v-toast .tsrc { position: absolute; left: calc(var(--fl, 0px) * var(--fz, 1) * .2 - 6px); bottom: 6px; width: 18px; height: 18px; border-radius: 50%;
+  display: grid; place-items: center; color: #fff; background: center/cover #2a2a33; box-shadow: 0 0 0 2px var(--base), 0 3px 8px -2px rgba(0, 0, 0, .5);
+  animation: tsrcIn .55s .25s var(--spring) both; pointer-events: none; }
+.v-toast .tsrc.tg { background: linear-gradient(160deg, #37aee2, #1e96c8); }
+.v-toast.msg .tsrc { bottom: auto; top: calc(var(--fpad, 2px) + var(--rp, .5) * (100% - 2 * var(--fpad, 2px) - 20px) + 16px); transition: top .75s cubic-bezier(.45, 0, .25, 1); } /* rides along with the face */
+.v-toast.msg .teyes { --fpad: 14px; }
+#stage.char-none .v-toast .tsrc { display: none; }
+@keyframes tsrcIn { from { opacity: 0; scale: .2; translate: 6px 4px; } 60% { opacity: 1; } to { opacity: 1; scale: 1; translate: 0 0; } }
+/* effects by the banner's face: as big as the face, on its inner side (never past the island's edge) */
+.eyes.fxl.tbig { scale: 1.45; }
+.eyes.fxl.edge .fx { scale: -1 1; }
+.eyes.fxl.edge .fx :is(.fx-q, .fx-bang) { scale: -1 1; }
+.qm.media:is(.k-voice, .k-audio) { display: flex; align-items: flex-end; gap: 2px; }
+.qm.media:is(.k-voice, .k-audio) .qtime { margin: 0 4px 4px 0; }
+
+/* message banner v5: the real Telegram logo on the avatar, round bubble corners, more room after the avatar */
+.v-toast.msg .mbadge.tg { background: none; padding: 0; overflow: hidden; }
+.v-toast.msg .mbadge.tg svg { display: block; }
+.v-toast.msg .mrow .mbub { border-radius: 16px; }
+.v-toast.msg .tb { margin-left: 5px; }
+
+/* a banner opening: the island grows in one quick soft move and the text fades in once there is room
+   (no text spilling over the edge while it is still growing) */
+#island[data-view="toast"] { transition: width .42s cubic-bezier(.3, 1.12, .4, 1), height .42s cubic-bezier(.3, 1.12, .4, 1), border-radius .4s var(--soft), transform .18s ease-out, top .5s var(--spring), opacity .3s; }
+#island[data-view="toast"] .v-toast { transition: opacity .22s .2s, transform .4s .14s var(--spring), filter .26s .16s; }
+.v-toast.msg .mrow { padding-left: 0; } /* the bubble starts right under the name (an indent pushed its rounded right end past the column) */
+/* no "typing" dots by the character when a message comes in: the banner itself says it */
+i.fx-msg, .fx-msg { display: none !important; }
+
+/* message banner: attachments as plain messages (a voice message: mic + length; a photo / video: a small preview) */
+.v-toast.msg .mbub.mattach { display: flex; align-items: center; gap: 10px; padding: 6px 13px 6px 6px; }
+.v-toast.msg .mattach .mic { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: #3e8ef7; }
+.v-toast.msg .mattach .mlabel { min-width: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.v-toast.msg .mattach .mpic { position: relative; flex: none; width: 74px; height: 56px; border-radius: 11px; background: center/cover color-mix(in srgb, var(--fg) 10%, transparent);
+  display: grid; place-items: center; opacity: .55; transition: opacity .35s; }
+.v-toast.msg .mattach .mpic.in { opacity: 1; }
+.v-toast.msg .mattach .mpic.round { width: 56px; border-radius: 50%; }
+.v-toast.msg .mattach .mpic.st { background-size: contain; background-repeat: no-repeat; background-color: transparent; }
+.v-toast.msg .mattach .mpic i { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: rgba(0, 0, 0, .5); color: #fff; }
+
+/* ================= effects v2: like the thinking spinner - thin glowing lines and dots in the eye colour,
+   always gently moving, beside the head (top right). The old round badges (tick, phone, pad) are gone. ================= */
+.fx > i:is(.fx-done, .fx-call, .fx-bang, .fx-bulb, .fx-q, .fx-notes, .fx-joy, .fx-vein) { display: none !important; }
+#stage:not(.gamelogo) .fx > i.fx-game, .mp .fx > i.fx-game { display: none !important; }
+#stage.gamelogo .fx > i.f-game { display: none !important; }
+.fx > i.fx2 { left: 50%; right: auto; top: 0; width: 16px; height: 16px; margin: -8px 0 0 -8px; translate: var(--fxx, 15px) var(--fxy, -11px);
+  transform: scale(.35); transition: opacity .35s, transform .5s var(--spring); }
+:is(.char-cat, .char-bunny, .char-robot, .char-alien, .char-angel, .char-frog, .char-devil) .fx > i.fx2 { --fxx: 21px; --fxy: -9px; }
+.char-ghost .fx > i.fx2 { --fxx: 22px; --fxy: -5px; }
+.fx2 svg { position: absolute; inset: 0; width: 16px; height: 16px; overflow: visible; fill: none; stroke: var(--eye); stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round;
+  filter: drop-shadow(0 0 2.5px var(--eyeGlow)) drop-shadow(0 0 1.5px rgba(0, 0, 0, .45)); }
+.fx2 svg circle { fill: var(--eye); stroke: none; }
+.fx2 b { position: absolute; display: block; border-radius: 50%; background: var(--eye); box-shadow: 0 0 5px var(--eyeGlow); }
+:root[data-mode="light"] .fx2 svg { filter: drop-shadow(0 0 2.5px var(--eyeGlow)) drop-shadow(0 0 1.5px rgba(255, 255, 255, .6)); }
+.eyes.fxl.edge .fx :is(.f-q, .f-bang) svg { scale: -1 1; } /* mirrored beside the banner's face: letters stay readable */
+
+/* done: a tick draws itself, a ring of sparks bursts out, then it softly breathes */
+:is(:is(.mood-done .eyes, .eyes.e-done) .f-done, .f-done.hold) { opacity: 1; transform: none; }
+.f-done svg path { stroke-width: 2.3; stroke-dasharray: 1; stroke-dashoffset: 1; }
+:is(:is(.mood-done .eyes, .eyes.e-done) .f-done, .f-done.hold) svg { animation: fxBreath 1.6s 1s ease-in-out infinite; }
+:is(:is(.mood-done .eyes, .eyes.e-done) .f-done, .f-done.hold) svg path { animation: fxDraw .45s .2s ease-out forwards; }
+.f-done b { left: 7px; top: 7px; width: 2.2px; height: 2.2px; opacity: 0; }
+:is(:is(.mood-done .eyes, .eyes.e-done) .f-done, .f-done.hold) b { animation: fxBurst .75s .5s cubic-bezier(.2, .7, .3, 1) both; }
+.f-done b:nth-child(2) { --a: 0deg; } .f-done b:nth-child(3) { --a: 60deg; } .f-done b:nth-child(4) { --a: 120deg; }
+.f-done b:nth-child(5) { --a: 180deg; } .f-done b:nth-child(6) { --a: 240deg; } .f-done b:nth-child(7) { --a: 300deg; }
+@keyframes fxDraw { to { stroke-dashoffset: 0; } }
+@keyframes fxBurst { 0% { opacity: 0; transform: rotate(var(--a)) translateX(2px) scale(.4); } 25% { opacity: 1; } 100% { opacity: 0; transform: rotate(var(--a)) translateX(11px) scale(1); } }
+@keyframes fxBreath { 50% { transform: scale(1.12); filter: drop-shadow(0 0 4px var(--eyeGlow)) drop-shadow(0 0 1.5px rgba(0, 0, 0, .45)); } }
+
+/* on a call: sound waves go out from a point, one after another */
+:is(:is(.mood-call .eyes, .eyes.e-call) .f-call, .f-call.hold) { opacity: 1; transform: none; }
+.f-call svg path { opacity: .15; }
+:is(:is(.mood-call .eyes, .eyes.e-call) .f-call, .f-call.hold) svg path { animation: fxWave 1.5s ease-in-out infinite; }
+:is(:is(.mood-call .eyes, .eyes.e-call) .f-call, .f-call.hold) svg path:nth-of-type(2) { animation-delay: .18s; }
+:is(:is(.mood-call .eyes, .eyes.e-call) .f-call, .f-call.hold) svg path:nth-of-type(3) { animation-delay: .36s; }
+:is(:is(.mood-call .eyes, .eyes.e-call) .f-call, .f-call.hold) svg circle { animation: fxPulse 1.5s ease-in-out infinite; transform-origin: 3px 13px; }
+@keyframes fxWave { 0%, 100% { opacity: .15; } 30% { opacity: 1; } 60% { opacity: .35; } }
+@keyframes fxPulse { 50% { transform: scale(1.35); } }
+
+/* gaming: four glowing buttons (like A B X Y) light up in turn */
+:is(:is(.mood-game .eyes, .eyes.e-game) .f-game, .f-game.hold) { opacity: 1; transform: rotate(45deg); }
+.f-game b { width: 4px; height: 4px; opacity: .3; }
+.f-game b:nth-child(1) { left: 2px; top: 2px; } .f-game b:nth-child(2) { left: 10px; top: 2px; }
+.f-game b:nth-child(3) { left: 10px; top: 10px; } .f-game b:nth-child(4) { left: 2px; top: 10px; }
+:is(:is(.mood-game .eyes, .eyes.e-game) .f-game, .f-game.hold) b { animation: fxBtn 1.6s ease-in-out infinite; }
+:is(:is(.mood-game .eyes, .eyes.e-game) .f-game, .f-game.hold) b:nth-child(2) { animation-delay: .4s; }
+:is(:is(.mood-game .eyes, .eyes.e-game) .f-game, .f-game.hold) b:nth-child(3) { animation-delay: .8s; }
+:is(:is(.mood-game .eyes, .eyes.e-game) .f-game, .f-game.hold) b:nth-child(4) { animation-delay: 1.2s; }
+@keyframes fxBtn { 0%, 100% { opacity: .3; transform: scale(.85); } 20% { opacity: 1; transform: scale(1.35); } 45% { opacity: .45; transform: scale(1); } }
+
+/* startled: the "!" springs up, little shock lines flicker around it */
+:is(:is(.mood-startle .eyes, .eyes.e-startle) .f-bang, .f-bang.hold) { opacity: 1; transform: none; animation: fxJolt .5s var(--spring) both; }
+.f-bang svg { --eye: #ffd23f; --eyeGlow: rgba(255, 200, 40, .7); }
+.f-bang .ray { stroke-width: 1.5; opacity: 0; }
+:is(:is(.mood-startle .eyes, .eyes.e-startle) .f-bang, .f-bang.hold) .ray { animation: fxFlick .7s .15s ease-out infinite; }
+@keyframes fxJolt { 0% { transform: translateY(6px) scale(.3) rotate(-15deg); } 60% { transform: translateY(-2px) scale(1.15) rotate(6deg); } 100% { transform: none; } }
+@keyframes fxFlick { 0% { opacity: 0; } 25% { opacity: 1; } 100% { opacity: 0; } }
+
+/* idea: a little spark - a glowing core with rays slowly turning and twinkling */
+:is(:is(.mood-idea .eyes, .eyes.e-idea) .f-idea, .f-idea.hold) { opacity: 1; transform: none; }
+.f-idea svg { --eye: #ffe27a; --eyeGlow: rgba(255, 210, 63, .85); }
+.f-idea .ray { transform-origin: 8px 8px; stroke-width: 1.5; }
+:is(:is(.mood-idea .eyes, .eyes.e-idea) .f-idea, .f-idea.hold) .ray { animation: fxSpin 5s linear infinite, fxTwinkle 1.2s ease-in-out infinite; }
+:is(:is(.mood-idea .eyes, .eyes.e-idea) .f-idea, .f-idea.hold) svg circle { animation: fxPulse 1.2s ease-in-out infinite; transform-origin: 8px 8px; }
+@keyframes fxSpin { to { rotate: 360deg; } }
+@keyframes fxTwinkle { 50% { opacity: .45; } }
+
+/* confused: a "?" writes itself and wobbles, a smaller one pops up beside it */
+:is(:is(.mood-confused .eyes, .eyes.e-confused) .f-q, .f-q.hold) { opacity: 1; transform: none; }
+.f-q svg path { stroke-dasharray: 1; stroke-dashoffset: 1; }
+.f-q svg circle { opacity: 0; }
+:is(:is(.mood-confused .eyes, .eyes.e-confused) .f-q, .f-q.hold) svg path { animation: fxDraw .5s .1s ease-out forwards; }
+:is(:is(.mood-confused .eyes, .eyes.e-confused) .f-q, .f-q.hold) svg circle { animation: fxFlick .01s .55s forwards; animation-name: fxShow; }
+:is(:is(.mood-confused .eyes, .eyes.e-confused) .f-q, .f-q.hold) svg:first-child { animation: fxWobble 1.6s .6s ease-in-out infinite; transform-origin: 8px 14px; }
+.f-q .q2 { scale: .6; translate: 9px -4px; opacity: 0; }
+:is(:is(.mood-confused .eyes, .eyes.e-confused) .f-q, .f-q.hold) .q2 { animation: fxQ2 1.6s .7s ease-in-out infinite; transform-origin: 8px 14px; }
+:is(:is(.mood-confused .eyes, .eyes.e-confused) .f-q, .f-q.hold) .q2 path { animation-delay: .7s; }
+:is(:is(.mood-confused .eyes, .eyes.e-confused) .f-q, .f-q.hold) .q2 circle { animation-delay: 1.15s; }
+@keyframes fxShow { to { opacity: 1; } }
+@keyframes fxWobble { 0%, 100% { rotate: -9deg; } 50% { rotate: 9deg; } }
+@keyframes fxQ2 { 0% { opacity: 0; rotate: 10deg; } 20%, 70% { opacity: .85; } 50% { rotate: -10deg; } 100% { opacity: 0; rotate: 10deg; } }
+
+/* joy, laughing, excited: three star sparkles twinkle in turn */
+:is(:is(.mood-joy, .mood-laugh, .mood-excited) .eyes .f-spark, .f-spark.hold), .eyes:is(.e-joy, .e-laugh, .e-excited) .f-spark { opacity: 1; transform: none; }
+.f-spark svg { stroke: none; fill: var(--eye); transform: scale(0); width: 18px; height: 18px; inset: -1px; }
+.f-spark svg:nth-child(1) { translate: 1px -2px; }
+.f-spark svg:nth-child(2) { translate: 10px -7px; width: 12px; height: 12px; }
+.f-spark svg:nth-child(3) { translate: 8px 10px; width: 11px; height: 11px; }
+:is(:is(.mood-joy, .mood-laugh, .mood-excited) .eyes .f-spark, .f-spark.hold) svg, .eyes:is(.e-joy, .e-laugh, .e-excited) .f-spark svg { animation: fxStar 1.5s ease-in-out infinite; }
+:is(:is(.mood-joy, .mood-laugh, .mood-excited) .eyes .f-spark, .f-spark.hold) svg:nth-child(2), .eyes:is(.e-joy, .e-laugh, .e-excited) .f-spark svg:nth-child(2) { animation-delay: .5s; }
+:is(:is(.mood-joy, .mood-laugh, .mood-excited) .eyes .f-spark, .f-spark.hold) svg:nth-child(3), .eyes:is(.e-joy, .e-laugh, .e-excited) .f-spark svg:nth-child(3) { animation-delay: 1s; }
+@keyframes fxStar { 0%, 100% { transform: scale(0) rotate(0); } 35% { transform: scale(1.1) rotate(45deg); } 60% { transform: scale(.8) rotate(70deg); } }
+
+/* dancing: a tiny equaliser bouncing to the music */
+:is(:is(.mood-dance .eyes, .eyes.e-dance) .f-eq, .f-eq.hold) { opacity: 1; transform: none; }
+.f-eq b { bottom: 2px; width: 2.4px; height: 4px; border-radius: 2px; }
+.f-eq b:nth-child(1) { left: 2px; } .f-eq b:nth-child(2) { left: 5.8px; } .f-eq b:nth-child(3) { left: 9.6px; } .f-eq b:nth-child(4) { left: 13.4px; }
+:is(:is(.mood-dance .eyes, .eyes.e-dance) .f-eq, .f-eq.hold) b { animation: fxEq .7s ease-in-out infinite alternate; }
+:is(:is(.mood-dance .eyes, .eyes.e-dance) .f-eq, .f-eq.hold) b:nth-child(2) { animation-duration: .45s; animation-delay: -.2s; }
+:is(:is(.mood-dance .eyes, .eyes.e-dance) .f-eq, .f-eq.hold) b:nth-child(3) { animation-duration: .6s; animation-delay: -.4s; }
+:is(:is(.mood-dance .eyes, .eyes.e-dance) .f-eq, .f-eq.hold) b:nth-child(4) { animation-duration: .5s; animation-delay: -.1s; }
+@keyframes fxEq { from { height: 3px; } to { height: 13px; } }
+
+/* angry: the anger mark - four arcs bent inward, throbbing (in the same glowing line style) */
+:is(:is(.mood-angry .eyes, .eyes.e-angry) .f-vein, .f-vein.hold) { opacity: 1; transform: none; }
+.f-vein svg { --eye: #ff4a3d; --eyeGlow: rgba(255, 60, 40, .8); stroke-width: 3; }
+:is(:is(.mood-angry .eyes, .eyes.e-angry) .f-vein, .f-vein.hold) svg { animation: fxThrob .5s ease-in-out infinite alternate; }
+@keyframes fxThrob { from { transform: scale(.88); } to { transform: scale(1.22); } }
+
+@media (prefers-reduced-motion: reduce) { .fx2, .fx2 * { animation: none !important; } .f-done svg path, .f-q svg path { stroke-dashoffset: 0; } .f-q svg circle, .f-spark svg { opacity: 1; transform: none; } }
+
+/* an effect whose mood just ended fades out while it keeps moving (no freeze, no snap) */
+.fx > i.hold { opacity: 0 !important; transition: opacity .65s ease !important; }
+
+/* quick chat: a voice message carries its sender's photo as the play button */
+.qplay { position: relative; width: 34px; height: 34px; overflow: hidden; background-size: cover; background-position: center; }
+.qplay .qletter { font-weight: 700; font-size: 14px; }
+.qplay .qpi { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; background: rgba(0, 0, 0, .38); opacity: 0; transition: opacity .2s; }
+.qplay:not(.face) .qpi { background: #3e8ef7; }
+.qplay:hover .qpi, .qvoice.on .qplay .qpi, .qvoice.load .qplay .qpi { opacity: 1; }
+.qplay:not(.face):not(:hover) .qpi { opacity: 1; }
+.qm.out .qplay:not(.face) .qpi { background: #fff; color: #2b6fd6; }
+
+/* Windik and the things that move with the cursor get their own compositor layers: otherwise each step he
+   takes toward the mouse (and the sliding sheen) repainted the whole island with its blurred colour blobs (~60 ms frames) */
+.v-compact .mid, .v-toast .tface, .v-mini .mini-eyes, .ochar, .eyes.fxl, #island > .ib .sheen { will-change: transform; }
+
+/* The open island (all the tabs: ~4800 elements) is left out of style work while it is closed: with the
+   «Живой» material every change of mood glides the island's colours for a second, and each frame of that
+   restyled every hidden tab (40-60 ms frames, the lag while petting Windik). It drops out only after its
+   closing fade, and is back (instantly) before the island measures it on opening. */
+.v-open { content-visibility: hidden; transition: opacity .22s, transform .45s var(--spring), filter .3s, content-visibility 0s .6s allow-discrete; }
+#island[data-view="open"] .v-open { content-visibility: visible; transition: opacity .32s .1s, transform .55s .05s var(--spring), filter .3s .08s, content-visibility 0s 0s allow-discrete; }
+
+/* being petted: eyes shut happily (^ ^), pink blush, a slow melt under the hand, hearts drifting up */
+#stage.petting .eyes:not(.fxl) { --eye: #ffb6d3; --eyeGlow: rgba(255, 120, 170, .55); animation: petMelt 2.2s ease-in-out infinite !important; }
+#stage.petting .eyes:not(.fxl) .eye { width: 8px; height: 5px; background-color: transparent; border-width: 2.4px 2.4px 0 2.4px; border-radius: 8px 8px 0 0; translate: 0 1px; }
+#stage.petting .eyes:not(.fxl)::before, #stage.petting .eyes:not(.fxl)::after { opacity: .9; }
+#stage.petting .eyes.fxl .hearts { opacity: 1; }
+#stage.petting .eyes.fxl .hearts b { animation: heartUp 2.2s ease-out infinite; }
+#stage.petting .eyes.fxl .hearts b:nth-child(1) { --hx: -22px; }
+#stage.petting .eyes.fxl .hearts b:nth-child(2) { --hx: 6px; animation-delay: .75s; font-size: 10px; }
+#stage.petting .eyes.fxl .hearts b:nth-child(3) { --hx: 24px; animation-delay: 1.5s; }
+@keyframes petMelt { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(1px) scale(1.05, .95); } }
+#stage.petting .eyes:not(.fxl) .eye { animation: none !important; clip-path: none !important; } /* the mood's own eye moves (squints, glances) pause while he is petted */
+
+/* the download pie: fills clockwise as the file comes in, gliding between updates */
+@property --pie { syntax: '<number>'; inherits: false; initial-value: 0; }
+.ring.pie { -webkit-mask: none; mask: none; animation: none;
+  background: conic-gradient(var(--glow) calc(var(--pie) * 1turn), color-mix(in srgb, var(--fg) 14%, transparent) 0);
+  box-shadow: 0 0 8px -2px var(--glow); transition: --pie .9s ease-out; }
+/* while petted he stays calm in the middle: no shaking from the busy / other moods' face moves */
+#stage.petting .eyes:not(.fxl) { filter: drop-shadow(0 0 3px var(--eyeGlow)); }
+
+/* message banner v6 (the mockup): the Telegram logo first fills the avatar's place, then glides into the
+   corner as the badge; longer texts get smaller letters (and the island more room); a long one is typed out */
+.v-toast.msg .mbadge.tg.intro { z-index: 2; animation: tgIntro 1.5s cubic-bezier(.55, 0, .2, 1) both; }
+@keyframes tgIntro {
+  0% { transform: translate(-18px, -18px) scale(1.6); opacity: 0; box-shadow: 0 0 0 0 #000; }
+  14% { transform: translate(-18px, -18px) scale(2.55); opacity: 1; box-shadow: 0 0 0 0 #000; }
+  52% { transform: translate(-18px, -18px) scale(2.55); box-shadow: 0 0 0 0 #000; }
+  100% { transform: none; opacity: 1; box-shadow: 0 0 0 2.5px #000; }
+}
+.v-toast.msg .ti .mav { animation: mavUnder .5s .6s ease-out both; }
+@keyframes mavUnder { from { opacity: 0; scale: .9; } }
+.v-toast.msg .mbub.sz-m { font-size: 12.5px; line-height: 16px; max-height: calc(16px * 8); }
+.v-toast.msg .mbub.sz-s { font-size: 12px; line-height: 15.5px; max-height: calc(15.5px * 10); }
+.v-toast.msg .mbub.typing::after { content: ''; display: inline-block; width: 2px; height: 1em; margin-left: 1px; vertical-align: -2px; border-radius: 1px; background: currentColor; opacity: .7; animation: caret .8s steps(2) infinite; }
+@keyframes caret { 50% { opacity: 0; } }
+
+/* message banner v7: a smaller Windik a little nearer the text, no dark ring on the badge,
+   and a long text arriving word by word (each word pops up into place) */
+.v-toast.msg { --fz: 1.15; gap: 11px; }
+.v-toast.msg .teyes { margin-left: 4px; }
+.v-toast.msg .tface { --fpad: 11px; }
+.v-toast.msg .teyes { --fpad: 11px; }
+.v-toast.msg .mbadge, .v-toast.msg .mbadge.tg { box-shadow: none; }
+@keyframes tgIntro {
+  0% { transform: translate(-18px, -18px) scale(1.6); opacity: 0; }
+  14% { transform: translate(-18px, -18px) scale(2.55); opacity: 1; }
+  52% { transform: translate(-18px, -18px) scale(2.55); }
+  100% { transform: none; opacity: 1; }
+}
+.v-toast.msg .mbub.typing::after { content: none; }
+.v-toast.msg .mbub.typing .w { display: none; }
+.v-toast.msg .mbub.typing .w.in { display: inline; animation: wordIn .38s cubic-bezier(.2, .9, .3, 1.25) both; }
+@keyframes wordIn { from { opacity: 0; translate: 0 5px; filter: blur(3px); } 60% { opacity: 1; filter: blur(0); } to { opacity: 1; translate: 0 0; } }
+.v-toast.msg .mbub .w { display: inline; }
+
+/* message banner v8: it appears softly (a slower fade and settle), words fade in gently */
+#island[data-view="toast"] .v-toast { transition: opacity .45s .12s ease, transform .6s .06s cubic-bezier(.2, .8, .2, 1), filter .5s .08s ease; }
+.v-toast.msg .mbub.typing .w.in { animation: wordIn .5s cubic-bezier(.2, .7, .2, 1) both; }
+@keyframes wordIn { from { opacity: 0; translate: 0 3px; filter: blur(2px); } to { opacity: 1; translate: 0 0; filter: blur(0); } }
+.v-toast.msg .mbub.sz-m { max-height: calc(16px * 10); }
+.v-toast.msg .mbub.sz-s { max-height: calc(15.5px * 14); }
+.v-toast.msg .mbub:not(.sz-m):not(.sz-s) { max-height: calc(17px * 7); }
+.v-toast.msg .mhead b { transition: font-size .3s; }
+
+/* Telegram: a photo / video over the whole island */
+.mview { position: absolute; inset: 0; z-index: 30; border-radius: inherit; overflow: hidden; display: grid; place-items: center;
+  background: rgba(6, 6, 10, .82); backdrop-filter: blur(14px); opacity: 0; transition: opacity .25s ease; }
+.mview.in { opacity: 1; }
+.mv-stage { position: absolute; inset: 0; display: grid; place-items: center; background: center/contain no-repeat; overflow: hidden; }
+.mv-img { max-width: calc(100% - 40px); max-height: calc(100% - 40px); border-radius: 12px; box-shadow: 0 20px 60px -20px rgba(0, 0, 0, .8);
+  scale: .94; opacity: 0; transition: scale .4s cubic-bezier(.2, .8, .2, 1), opacity .3s, filter .35s; cursor: zoom-in; user-select: none; touch-action: none; }
+.mview.in .mv-img { scale: 1; opacity: 1; }
+.mv-img.soft { filter: blur(6px); }
+.mv-img.zoomed { cursor: grab; }
+.mv-video { max-width: calc(100% - 40px); max-height: calc(100% - 40px); border-radius: 12px; background: #000; }
+.mv-video.round { border-radius: 50%; aspect-ratio: 1; object-fit: cover; }
+.mv-bar { position: absolute; top: 12px; right: 12px; display: flex; gap: 6px; z-index: 2; }
+.mv-btn { width: 32px; height: 32px; border: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer; color: #fff; background: rgba(255, 255, 255, .14); transition: background .2s, transform .2s var(--spring); }
+.mv-btn:hover { background: rgba(255, 255, 255, .26); transform: scale(1.08); }
+.mv-load { position: absolute; display: flex; gap: 5px; pointer-events: none; }
+.mv-load i { width: 6px; height: 6px; border-radius: 50%; background: #fff; opacity: .5; animation: fxDot 1s ease-in-out infinite; }
+.mv-load i:nth-child(2) { animation-delay: .15s; } .mv-load i:nth-child(3) { animation-delay: .3s; }
+.mv-fail { color: #fff; opacity: .7; font-size: 13px; }
+/* quick chat: online status, recording a voice message */
+.qname small.qstat { color: var(--fg3); transition: color .3s; }
+.qname small.qstat.on { color: #4fb3ff; }
+.qsend.mic { background: color-mix(in srgb, var(--fg) 14%, transparent); color: var(--fg); }
+.qsend.rec { background: #ff4d5e; color: #fff; }
+.qbar.recording .qin { display: none; }
+.qrec { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 6px; border-radius: 19px; background: color-mix(in srgb, var(--fg) 8%, transparent); }
+.qrdot { width: 8px; height: 8px; border-radius: 50%; background: #ff4d5e; animation: qpulse .8s ease-in-out infinite alternate; }
+.qrt { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--fg2); }
+.qrw { flex: 1; min-width: 0; height: 22px; display: flex; align-items: center; justify-content: flex-end; gap: 2px; overflow: hidden; }
+.qrw i { flex: none; width: 2.5px; border-radius: 2px; background: #ff4d5e; opacity: .85; }
+.qbar.sending .qsend { opacity: .5; pointer-events: none; }
+
+/* the player gives no track length (e.g. YouTube in a browser): no times, just a calm line */
+.v-mini .prog.notime { pointer-events: none; }
+.v-mini .prog.notime :is(.js-pos, .js-dur) { visibility: hidden; }
+.v-mini .prog.notime .track i { width: 100% !important; opacity: .18; }
+
+/* buttons come alive under the cursor: they drift toward it a little (magnetic), lift and glow in the
+   island's colours, a soft light follows the pointer across them, and a press squishes them */
+#stage :is(.btn, .ibtn, .cbtn-s, .mpb, .chip, .mv-btn, .qsend, .tgtool, .qplay, .tgvp) { position: relative; translate: var(--bx, 0px) var(--by, 0px);
+  transition: translate .45s cubic-bezier(.2, .9, .3, 1.35), scale .35s cubic-bezier(.2, .9, .3, 1.45), box-shadow .3s ease, background .2s, background-color .2s, color .2s, filter .25s, opacity .2s, transform .25s var(--spring); }
+#stage :is(.btn, .ibtn, .cbtn-s, .mpb, .chip, .mv-btn, .qsend, .tgtool, .qplay, .tgvp)::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity .3s;
+  background: radial-gradient(60px circle at var(--px, 50%) var(--py, 50%), color-mix(in srgb, #fff 26%, transparent), transparent 70%); }
+:root[data-mode="light"] #stage :is(.btn, .ibtn, .cbtn-s, .mpb, .chip, .mv-btn, .qsend, .tgtool, .qplay, .tgvp)::after { background: radial-gradient(60px circle at var(--px, 50%) var(--py, 50%), color-mix(in srgb, var(--c1) 22%, transparent), transparent 70%); }
+#stage :is(.btn, .ibtn, .cbtn-s, .mpb, .chip, .mv-btn, .qsend, .tgtool, .qplay, .tgvp):not(:disabled):hover { scale: 1.08; filter: brightness(1.1); box-shadow: 0 8px 20px -10px var(--glow), 0 0 0 1px color-mix(in srgb, var(--glow) 40%, transparent); }
+#stage :is(.btn, .ibtn, .cbtn-s, .mpb, .chip, .mv-btn, .qsend, .tgtool, .qplay, .tgvp):not(:disabled):hover::after { opacity: 1; }
+#stage :is(.btn, .ibtn, .cbtn-s, .mpb, .chip, .mv-btn, .qsend, .tgtool, .qplay, .tgvp):not(:disabled):active { scale: .93; transition-duration: .09s; }
+#stage :is(.btn, .ibtn, .cbtn-s, .mpb, .chip, .mv-btn, .qsend, .tgtool, .qplay, .tgvp).magnet-leave { transition-duration: .6s; }
+@media (prefers-reduced-motion: reduce) { #stage :is(.btn, .ibtn, .cbtn-s, .mpb, .chip, .mv-btn, .qsend, .tgtool, .qplay, .tgvp) { translate: none; } }
+
+/* the mini island's face walks around (moved by transform on this wrapper, see miniWalkFrame) */
+.v-mini .mwalk { display: inline-flex; flex: none; will-change: transform; position: relative; z-index: 2; }
+
+/* live numbers in the pill: steady widths (tabular digits), changed characters roll in, the width glides */
+.v-compact .js-sub { display: inline-block; white-space: nowrap; overflow: visible; font-variant-numeric: tabular-nums;
+  transition: width .5s cubic-bezier(.2, .8, .2, 1); vertical-align: middle; }
+.v-compact .js-sub .rl { display: inline-block; white-space: pre; }
+.v-compact .js-sub .rl.in { animation: rollIn .38s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes rollIn { from { opacity: 0; transform: translateY(55%); filter: blur(1.5px); } to { opacity: 1; transform: none; filter: none; } }
+
+/* phone tab v2: a compact card, then the photos by day in a grid of small previews (made by Windows,
+   loaded as they scroll into view), and files dropped anywhere on the tab go to the phone */
+.ph-wrap:not(.nodev) { position: relative; display: flex; flex-direction: column; gap: 10px; height: 100%; }
+.ph-card { flex: none; }
+.ph-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 0 2px; }
+.ph-head b { font-size: 13.5px; }
+.ph-count { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 9px; background: color-mix(in srgb, var(--fg) 10%, transparent); color: var(--fg2); }
+.ph-count:empty { display: none; }
+.ph-gal { flex: 1; min-height: 0; overflow-y: auto; padding: 0 2px 6px; scrollbar-width: thin; }
+.ph-day { position: sticky; top: 0; z-index: 1; padding: 6px 2px 5px; font-size: 11.5px; font-weight: 700; color: var(--fg2);
+  background: linear-gradient(var(--base) 70%, transparent); }
+.ph-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 4px; margin-bottom: 6px; }
+.ph-tile { position: relative; aspect-ratio: 1; border: 0; border-radius: 9px; padding: 0; cursor: zoom-in; overflow: hidden;
+  background: center/cover no-repeat color-mix(in srgb, var(--fg) 7%, transparent); opacity: .55; transition: opacity .35s, transform .25s cubic-bezier(.2, .9, .3, 1.4), filter .2s; }
+.ph-tile.in { opacity: 1; }
+.ph-tile.none { opacity: .35; }
+.ph-tile:hover { transform: scale(1.04); filter: brightness(1.08); z-index: 1; }
+.ph-tile:active { transform: scale(.97); }
+.ph-tile .ph-play { position: absolute; left: 50%; top: 50%; translate: -50% -50%; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: rgba(0, 0, 0, .5); color: #fff; }
+.ph-none { display: grid; place-items: center; gap: 8px; padding: 30px 10px; color: var(--fg3); font-size: 12.5px; text-align: center; }
+.ph-recent { display: none; }
+/* dropping files: the whole tab says where they go */
+.ph-wrap:not(.nodev) .ph-drop { position: absolute; inset: 0; z-index: 3; display: grid; place-content: center; justify-items: center; gap: 6px; border-radius: 18px;
+  background: color-mix(in srgb, var(--base) 82%, transparent); backdrop-filter: blur(8px); box-shadow: inset 0 0 0 2px #7c5cff; opacity: 0; pointer-events: none; transition: opacity .2s; }
+.ph-wrap:not(.nodev) .ph-drop small { color: var(--fg3); }
+.ph-wrap.over .ph-drop, .ph-wrap:not(.nodev) .ph-drop.over { opacity: 1; }
+/* gallery viewer: arrows on the sides, the counter and the date below */
+.mview.gallery .mv-nav { position: absolute; top: 50%; translate: 0 -50%; width: 40px; height: 40px; border: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer; z-index: 2;
+  color: #fff; background: rgba(255, 255, 255, .12); transition: background .2s, transform .25s cubic-bezier(.2, .9, .3, 1.4); }
+.mview.gallery .mv-nav:hover { background: rgba(255, 255, 255, .24); transform: scale(1.08); }
+.mview.gallery .mv-nav.l { left: 14px; } .mview.gallery .mv-nav.r { right: 14px; }
+.mview.gallery .mv-foot { position: absolute; left: 0; right: 0; bottom: 12px; display: flex; justify-content: center; gap: 10px; align-items: center; color: #fff; font-size: 12px; pointer-events: none; }
+.mview.gallery .mv-count { padding: 2px 9px; border-radius: 10px; background: rgba(255, 255, 255, .14); font-weight: 700; font-variant-numeric: tabular-nums; }
+.mview.gallery .mv-cap { opacity: .7; }
+.mview.gallery .mv-img { max-width: calc(100% - 120px); max-height: calc(100% - 70px); transition: scale .4s cubic-bezier(.2, .8, .2, 1), opacity .3s, filter .35s, transform .3s cubic-bezier(.2, .8, .2, 1); }
+.mview.gallery .mv-img.swap-r { animation: galR .32s cubic-bezier(.2, .8, .2, 1); }
+.mview.gallery .mv-img.swap-l { animation: galL .32s cubic-bezier(.2, .8, .2, 1); }
+@keyframes galR { from { opacity: .3; translate: 24px 0; } }
+@keyframes galL { from { opacity: .3; translate: -24px 0; } }
+.mview.gallery .mv-play { position: absolute; width: 56px; height: 56px; border: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer; background: rgba(0, 0, 0, .55); color: #fff; }
+
+/* the viewer's buttons and arrows stay well inside the island's rounded edge */
+.mview .mv-bar { top: 16px; right: 22px; }
+.mview.gallery .mv-nav.l { left: 22px; } .mview.gallery .mv-nav.r { right: 22px; }
+.mview.gallery .mv-foot { bottom: 16px; }
+.mview .mv-img { max-width: calc(100% - 130px); max-height: calc(100% - 96px); }
+
+/* the open view is 20px larger than the island on every side (room for its glow): the viewer sits on the island itself
+   so its buttons and arrows are never cut by the edge; the picture always fits (a definite grid area)
+   */
+.v-open > .mview { inset: 20px; border-radius: 34px; }
+.mv-stage { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+.mview .mv-img, .mview.gallery .mv-img { max-width: calc(100% - 130px); max-height: calc(100% - 96px); object-fit: contain; }
+
+/* stretching the open island: a grab handle at the bottom (taller), the bottom corners (wider and taller) */
+#island .rz { position: absolute; z-index: 40; display: none; }
+#island[data-view="open"] .rz { display: block; }
+#island .rz-b { left: 50%; bottom: 0; width: 160px; height: 14px; margin-left: -80px; cursor: ns-resize; }
+#island .rz-b::after { content: ''; position: absolute; left: 50%; bottom: 5px; width: 44px; height: 5px; margin-left: -22px; border-radius: 3px;
+  background: color-mix(in srgb, var(--fg) 30%, transparent); opacity: 0; transition: opacity .25s, width .3s cubic-bezier(.2, .9, .3, 1.4), margin .3s cubic-bezier(.2, .9, .3, 1.4), background .2s; }
+#island[data-view="open"]:hover .rz-b::after { opacity: .7; }
+#island .rz-b:hover::after, #island.stretching .rz-b::after { opacity: 1; width: 64px; margin-left: -32px; background: color-mix(in srgb, var(--fg) 55%, transparent); }
+#island .rz-bl, #island .rz-br { bottom: 0; width: 26px; height: 26px; }
+#island .rz-bl { left: 0; cursor: nesw-resize; }
+#island .rz-br { right: 0; cursor: nwse-resize; }
+/* while stretching, the island follows the hand at once (no spring lag) */
+#island.stretching { transition: transform .18s ease-out, top .5s var(--spring), opacity .3s !important; }
+#island.stretching .page { transition: none; }
+
+/* custom scrollbars everywhere (island, settings, AI window): a thin rounded bar that floats inside the
+   edge, barely there until you are over the scrolling area, brighter under the mouse, no arrows or track.
+   (A standard scrollbar-width/scrollbar-color would switch these styles off, so they are reset here.) */
+* { scrollbar-width: auto !important; scrollbar-color: auto !important; }
+::-webkit-scrollbar { width: 10px; height: 10px; background: transparent; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+::-webkit-scrollbar-thumb { min-height: 28px; border-radius: 10px; border: 3px solid transparent; background-clip: padding-box;
+  background-color: color-mix(in srgb, var(--fg) 0%, transparent); transition: background-color .3s; }
+:hover::-webkit-scrollbar-thumb { background-color: color-mix(in srgb, var(--fg) 20%, transparent); }
+::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--fg) 38%, transparent); border-width: 2px; }
+::-webkit-scrollbar-thumb:active { background-color: color-mix(in srgb, #9d8bff 70%, transparent); border-width: 2px; }
+.qmsgs::-webkit-scrollbar { width: 8px; }
+/* gallery days: a small frosted label that floats above the photos (no dark band; hovered photos pass under it) */
+.ph-day { position: sticky; top: 4px; z-index: 4; width: fit-content; margin: 4px 0 6px 2px; padding: 3px 10px; border-radius: 10px;
+  background: color-mix(in srgb, var(--base) 55%, transparent); backdrop-filter: blur(10px) saturate(1.3); box-shadow: 0 2px 10px -4px rgba(0, 0, 0, .4); color: var(--fg); }
+.ph-tile:hover { z-index: 2; }
+.ph-gal { padding-top: 0; }
+/* the viewer's dark backdrop fills the island's whole living outline (the waves bend the edge; a fixed
+   rounded box left a gap where they bulged out); its buttons keep their places inside */
+.v-open > .mview { inset: 0; border-radius: 0; }
+.v-open > .mview .mv-stage { inset: 20px; }
+.v-open > .mview .mv-bar { top: 36px; right: 42px; }
+.v-open > .mview.gallery .mv-nav.l { left: 42px; } .v-open > .mview.gallery .mv-nav.r { right: 42px; }
+.v-open > .mview.gallery .mv-foot { bottom: 36px; }
+
+/* chats: a new message slides up into place; my own shows at once, a little faded until Telegram confirms */
+.tgm.tgm-in, .qm.qm-in { animation: msgIn .42s cubic-bezier(.2, .9, .3, 1.15) both; }
+@keyframes msgIn { from { opacity: 0; translate: 0 14px; scale: .96; } to { opacity: 1; translate: 0 0; scale: 1; } }
+.tgm.out.tgm-in, .qm.out.qm-in { transform-origin: 100% 100%; } .tgm:not(.out).tgm-in, .qm:not(.out).qm-in { transform-origin: 0 100%; }
+.qm.pending, .tgm.pending { opacity: .7; transition: opacity .3s; }
+
+/* performance: the big parts of the open island are laid out on their own (a change inside one of them
+   no longer makes the browser lay out the whole island), and the tab pill glides by CSS */
+.v-open .page { contain: layout style paint; }
+.v-open .tabs { contain: layout style; }
+.tabs .ind { transition: transform .42s cubic-bezier(.3, 1.3, .5, 1), width .42s cubic-bezier(.3, 1.3, .5, 1); }
+
+/* several tasks of one agent at once: a count on its logo, every task on hover (droplet) and in the mini island */
+.alogo { position: relative; }
+.acount { position: absolute; right: -6px; top: -5px; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 8px; display: grid; place-items: center;
+  font: 800 9.5px/1 system-ui, sans-serif; color: #fff; background: #ff6a3d; box-shadow: 0 0 0 2px var(--base); animation: acountIn .45s cubic-bezier(.2, .9, .3, 1.5) both; }
+.bubble .acount { right: -3px; top: -3px; min-width: 17px; height: 17px; font-size: 10.5px; }
+@keyframes acountIn { from { scale: 0; } }
+.bubtip { position: absolute; z-index: 60; min-width: 210px; max-width: 300px; padding: 10px 12px; border-radius: 16px; pointer-events: none;
+  background: color-mix(in srgb, var(--base) 88%, transparent); backdrop-filter: blur(14px); box-shadow: 0 0 0 1px var(--line), 0 14px 34px -14px rgba(0, 0, 0, .7);
+  color: var(--fg); font-size: 12px; opacity: 0; translate: 0 -6px; scale: .96; transform-origin: 20px 0; transition: opacity .2s, translate .3s cubic-bezier(.2, .9, .3, 1.3), scale .3s cubic-bezier(.2, .9, .3, 1.3); }
+.bubtip.on { opacity: 1; translate: 0 0; scale: 1; }
+.bubtip b { display: block; margin-bottom: 6px; font-size: 12.5px; }
+.btask { display: flex; gap: 8px; align-items: flex-start; padding: 4px 0; }
+.btask + .btask { border-top: 1px solid var(--line); }
+.btdot, .mtdot { flex: none; width: 7px; height: 7px; margin-top: 5px; border-radius: 50%; background: #ff8a5c; box-shadow: 0 0 8px #ff8a5c; animation: qpulse .9s ease-in-out infinite alternate; }
+.btp { font-weight: 700; }
+.btn2 { color: var(--fg3); font-size: 11px; line-height: 1.3; }
+.v-mini .mtasks { display: grid; gap: 4px; margin-top: 4px; }
+.v-mini .mtask { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 11.5px; }
+.v-mini .mtask b { flex: none; font-weight: 700; }
+.v-mini .mtask .mtn { min-width: 0; color: var(--fg3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v-mini .mtask .mtdot { margin-top: 0; }
+
+/* a long message shows whole (its own max height is set from the screen size) */
+.v-toast.msg .mbub.sz-m, .v-toast.msg .mbub.sz-s, .v-toast.msg .mbub:not(.sz-m):not(.sz-s) { max-height: none; }
+
+/* views that have faded out are not painted (see hideIdleViews) */
+#island > .view.gone { visibility: hidden; }
+/* a long command or path in a task wraps (two lines at most) instead of running out of the card */
+.btn2 { overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.bubtip { max-width: 340px; }
+/* a big island zooming in or out (see setView): its size is set at once, no size glide; the water edge
+   steps aside for that moment */
+#island.zoom { transition: transform .18s ease-out, top .5s var(--spring) !important; }
+#island.zoom > .view { transition: none !important; }
+#stage.zooming canvas { opacity: 0; transition: opacity .12s; }
+#stage canvas { transition: opacity .35s; }
+
+/* a message under the open island: a banner like the mini island, dropping out from under it */
+#flash.msg { width: max-content; min-width: 260px; max-width: 400px; padding: 10px 16px 10px 10px; gap: 12px; border-radius: 24px; align-items: center;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--base) 92%, #fff 8%), var(--base));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--fg) 9%, transparent), 0 18px 40px -16px rgba(0, 0, 0, .75), 0 0 26px -8px var(--glow);
+  transform: translate(-50%, -18px) scale(.82); transform-origin: 50% 0; overflow: hidden;
+  transition: opacity .3s, transform .55s cubic-bezier(.3, 1.45, .5, 1); }
+#flash.msg.on { transform: translate(-50%, 0) scale(1); }
+#flash.msg .fav { position: relative; flex: none; }
+#flash.msg .mav { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background-size: cover; background-position: center;
+  color: #fff; font-weight: 700; font-size: 17px; box-shadow: 0 2px 10px -4px rgba(0, 0, 0, .6); }
+#flash.msg .mbadge { position: absolute; right: -3px; bottom: -3px; width: 17px; height: 17px; border-radius: 50%; display: grid; place-items: center; overflow: hidden;
+  background: center/cover no-repeat var(--card2); box-shadow: 0 0 0 2.5px var(--base); }
+#flash.msg .mbadge.tg { background: none; }
+#flash.msg .mbadge.tg svg { display: block; width: 100%; height: 100%; }
+#flash.msg .fbody { min-width: 0; flex: 1; display: grid; gap: 2px; }
+#flash.msg .fhead { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
+#flash.msg .fhead b { font-size: 13.5px; font-weight: 750; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#flash.msg .fhead span { flex: none; font-size: 11px; font-weight: 600; color: var(--fg3); }
+#flash.msg .ftext { font-size: 12.5px; font-weight: 500; line-height: 1.35; color: var(--fg2); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+#flash.msg .flash-eyes { zoom: .8; margin-left: 4px; align-self: center; }
+#flash.msg .fbar { position: absolute; left: 18px; right: 18px; bottom: 4px; height: 2px; border-radius: 2px; background: color-mix(in srgb, var(--fg) 22%, transparent); transform-origin: 0 50%; }
+#flash.msg.on .fbar { animation: fbar linear both; }
+@keyframes fbar { from { scale: 1 1; } to { scale: 0 1; } }
+#flash.msg.on .mav { animation: mavIn .5s var(--spring) both; }
+
+/* watching a video (YouTube, TikTok, a film): he lies back with relaxed, half-lidded eyes that slowly
+   follow the action, lit by the screen in changing colours, a bucket of popcorn at his side */
+:is(.mood-watch .eyes, .eyes.e-watch) { rotate: -6deg; animation: watchScreen 5s ease-in-out infinite; }
+:is(.mood-watch .eyes, .eyes.e-watch) .eye { height: 10px; border-radius: 3px 3px 5px 5px; animation: watchLook 11s ease-in-out infinite; }
+@keyframes watchLook {
+  0%, 100% { translate: 0 1.5px; }
+  18%, 30% { translate: -1.8px 1px; }
+  40% { translate: -1.8px 1px; height: 2px; }
+  43% { translate: -1.8px 1px; height: 10px; }
+  58%, 70% { translate: 1.6px 1.4px; }
+  84% { translate: 0 .4px; height: 12px; } /* something exciting on screen: eyes open a little wider */
+  90% { translate: 0 .4px; height: 12px; }
+}
+@keyframes watchScreen {
+  0%, 100% { filter: drop-shadow(0 0 2.5px rgba(110, 170, 255, .7)) drop-shadow(0 0 8px rgba(110, 170, 255, .45)); }
+  33% { filter: drop-shadow(0 0 2.5px rgba(255, 120, 200, .65)) drop-shadow(0 0 8px rgba(255, 120, 200, .4)); }
+  66% { filter: drop-shadow(0 0 2.5px rgba(255, 200, 110, .65)) drop-shadow(0 0 8px rgba(255, 200, 110, .4)); }
+}
+.fx > i.f-pop { font-style: normal; }
+.f-pop b { position: absolute; inset: 0; font-size: 11px; line-height: 16px; text-align: center; font-weight: 400; }
+:is(:is(.mood-watch .eyes, .eyes.e-watch) .f-pop, .f-pop.hold) { opacity: 1; transform: none; }
+:is(.mood-watch .eyes, .eyes.e-watch) .f-pop b { animation: popMunch 4.2s ease-in-out infinite; }
+@keyframes popMunch { 0%, 68%, 100% { translate: 0 0; rotate: 0deg; } 74% { translate: -1px -3px; rotate: -12deg; } 80% { translate: 0 0; rotate: 6deg; } 86% { translate: 0 -1.5px; rotate: -4deg; } }
+
+/* the message banner is a little island: the island's own body underneath (its colours, the liquid
+   flowing in it, its skin), softer corners, a liquid edge that slowly breathes, and it drips out from
+   under the island (or down from the top edge when the island is hidden away) */
+#flash.msg { background: transparent; border-radius: 17px; isolation: isolate; overflow: visible;
+  box-shadow: 0 18px 40px -16px rgba(0, 0, 0, .7), 0 0 28px -8px var(--glow);
+  transform: translate(-50%, -26px) scale(.7, .45); transform-origin: 50% 0;
+  transition: opacity .25s, transform .7s cubic-bezier(.25, 1.55, .45, 1); }
+#flash.msg.on { transform: translate(-50%, 0) scale(1); animation: fliqEdge 3.6s ease-in-out .7s infinite; }
+#flash.msg.top { top: 8px; }
+#flash.msg > .fib { position: absolute; inset: 0; z-index: -1; border-radius: inherit; overflow: hidden; background: var(--base);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 10%, transparent); }
+#flash.msg > .fib > * { border-radius: inherit; }
+#flash.msg > .fib .liquid i { width: 220px; filter: blur(22px); }
+#flash.msg .fbar { z-index: 1; }
+/* the edge of liquid: the corners and sides slowly swell and settle, like the island's water */
+@keyframes fliqEdge {
+  0%, 100% { border-radius: 17px 17px 17px 17px / 17px 17px 17px 17px; }
+  25% { border-radius: 19px 15px 18px 16px / 15px 19px 16px 18px; }
+  50% { border-radius: 15px 19px 16px 19px / 18px 16px 19px 15px; }
+  75% { border-radius: 18px 16px 19px 15px / 16px 18px 15px 19px; }
+}
+#flash.msg.on > .fib { animation: fliqWobble 3.6s ease-in-out .7s infinite; }
+@keyframes fliqWobble { 0%, 100% { scale: 1 1; } 30% { scale: 1.008 .985; } 60% { scale: .993 1.012; } }
+/* a drop of the island's liquid stretching from it as the banner comes out */
+#flash.msg::before { content: ''; position: absolute; left: 50%; top: -12px; width: 26px; height: 16px; margin-left: -13px; z-index: -2;
+  border-radius: 50% 50% 40% 40%; background: var(--base); opacity: 0; transform-origin: 50% 0; }
+#flash.msg.on::before { animation: fliqDrop .8s cubic-bezier(.3, .8, .4, 1) both; }
+#flash.msg.top::before { display: none; }
+@keyframes fliqDrop { 0% { opacity: 1; scale: .5 1.6; } 45% { opacity: 1; scale: 1 1; } 100% { opacity: 0; scale: 1.6 .2; } }
+/* leaving: a little breath in, then it draws back up like a drop and melts away (no snap) */
+#flash.msg.out { animation: fliqOut .7s cubic-bezier(.45, 0, .55, 1) forwards; }
+#flash.msg.out > .fib { animation: none; }
+#flash.msg.out .fbar { opacity: 0; transition: opacity .2s; }
+@keyframes fliqOut {
+  0% { opacity: 1; transform: translate(-50%, 0) scale(1); filter: blur(0); }
+  28% { opacity: 1; transform: translate(-50%, 2px) scale(1.025, .965); filter: blur(0); }
+  100% { opacity: 0; transform: translate(-50%, -16px) scale(.8, .5); filter: blur(5px); }
+}
+/* a message on the island itself fades out softly too as the island goes back to the pill */
+#island:not([data-view="toast"]) > .v-toast { transition: opacity .42s ease-out, transform .55s var(--spring), filter .45s ease-out; }

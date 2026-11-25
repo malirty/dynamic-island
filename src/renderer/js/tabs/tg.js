@@ -1,5 +1,6 @@
 // A mini Telegram inside the island: chats, replies, voice messages and video notes.
 // It has its own look (Настройки → Мини-Telegram), it's not a copy of Telegram.
+import { openMediaView } from '../mediaview.js';
 import { api, bus, state, $, $$, h, esc, icon, mediaIcon, clock } from '../core.js';
 
 let ctx, root;
@@ -220,8 +221,41 @@ function syncComposer() {
 }
 const errMsg = (e) => (e?.message || String(e)).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
 function gotMessage(peer, m) {
-  if (peer === cur && !msgs.some((x) => x.id === m.id)) { msgs.push(m); renderMessages(true); }
+  if (peer === cur) appendMessage(m);
   bumpDialog(peer, m);
+}
+// A new message slides in at the bottom; the chat isn't redrawn (that made it flicker on every message).
+// My own message shows at once as "sending" and becomes the real one in place when Telegram confirms it.
+function appendMessage(m) {
+  const box = $('.tgmsgs', root);
+  if (!box) return;
+  if (m.out && !m.pending) {
+    const k = msgs.findIndex((x) => x.pending && x.text === m.text);
+    if (k >= 0) {
+      const old = msgs[k]; msgs[k] = m;
+      const el = box.querySelector(`.tgm[data-id="${old.id}"]`);
+      if (el) el.replaceWith(messageEl(m, el.classList.contains('tail')));
+      return;
+    }
+  }
+  if (msgs.some((x) => x.id === m.id)) return;
+  const prev = msgs[msgs.length - 1];
+  msgs.push(m);
+  box.querySelector('.tgload')?.remove();
+  if (!prev || new Date(prev.date).toDateString() !== new Date(m.date).toDateString()) box.append(h('div', { class: 'tgday' }, new Date(m.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })));
+  // the previous bubble loses its tail when the same person goes on writing
+  if (prev && prev.out === m.out && prev.from === m.from && m.date - prev.date <= 5 * 60e3) { const pe = box.querySelector(`.tgm[data-id="${prev.id}"]`); if (pe) pe.replaceWith(messageEl(prev, false)); }
+  const el = messageEl(m, true);
+  el.classList.add('tgm-in');
+  if (m.pending) el.classList.add('pending');
+  box.append(el);
+  if (stick || m.out) box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' });
+}
+function dropPending(text) {
+  const k = msgs.findIndex((x) => x.pending && x.text === text);
+  if (k < 0) return;
+  $('.tgmsgs', root)?.querySelector(`.tgm[data-id="${msgs[k].id}"]`)?.remove();
+  msgs.splice(k, 1);
 }
 async function send() {
   if (rec) return finishRecording();
@@ -244,8 +278,11 @@ async function send() {
       $('.tgcomp', root)?.classList.add('sending');
       // the text goes as the caption of the first file
       for (const [i, f] of files.entries()) gotMessage(peer, await api.invoke('tg:sendFile', peer, { path: f.path, data: f.data, name: f.name }, i === 0 ? text : '', i === 0 ? rt : null));
-    } else gotMessage(peer, await api.invoke('tg:send', peer, text, rt));
-  } catch (e) { ctx.flash({ icon: '⚠️', title: 'Не отправилось: ' + errMsg(e), ms: 3500 }); if (peer === cur) { ta.value = text; pend = files; renderPend(); } }
+    } else {
+      if (peer === cur) appendMessage({ id: 'tmp' + Date.now(), out: true, pending: true, text, kind: 'text', date: Date.now(), replyTo: rt });
+      gotMessage(peer, await api.invoke('tg:send', peer, text, rt));
+    }
+  } catch (e) { ctx.flash({ icon: '⚠️', title: 'Не отправилось: ' + errMsg(e), ms: 3500 }); if (peer === cur) { dropPending(text); ta.value = text; pend = files; renderPend(); } }
   $('.tgcomp', root)?.classList.remove('sending');
   syncComposer();
 }
@@ -364,6 +401,7 @@ function messageEl(m, tail) {
   if (m.kind === 'voice') body.append(voiceEl(m));
   else if (m.kind === 'round') body.append(roundEl(m));
   else if (m.kind === 'photo' || m.kind === 'sticker') body.append(imageEl(m));
+  else if (m.kind === 'video' || m.kind === 'gif') body.append(videoEl(m));
   else if (m.kind !== 'text') body.append(h('div', { class: 'tgfile' }, h('span', { html: icon(m.kind === 'audio' ? 'note' : m.kind === 'video' || m.kind === 'gif' ? 'image' : 'file', 16) }), h('span', {}, m.fileName || snippet(m))));
   if (m.text) body.append(h('div', { class: 'tgt', html: linkify(m.text) }));
   const ex = extra.get(`${cur}:${m.id}`);
@@ -497,12 +535,17 @@ function voiceEl(m) {
   const wave = m.wave?.length ? Array.from({ length: n }, (_, i) => m.wave[Math.floor((i * m.wave.length) / n)]) : Array.from({ length: n }, (_, i) => 6 + ((i * 7) % 11));
   const max = Math.max(1, ...wave);
   const bars = h('div', { class: 'tgwave' }, ...wave.map((v) => h('i', { style: `height:${Math.max(12, (v / max) * 100)}%` })));
-  const btn = h('button', { class: 'tgvp', html: mediaIcon('play', 15) });
+  // the play button is the sender's photo: mine on my voice messages, the friend's on theirs
+  const face = m.out ? me?.avatar : (m.from ? null : avatars.get(cur));
+  const who = m.out ? (me?.name || 'Я') : (m.from || dialogs.find((d) => d.peer === cur)?.name || '');
+  const btn = h('button', { class: 'tgvp' + (face ? ' face' : ''), style: face ? `background-image:url('${face}')` : '' },
+    face ? '' : h('span', { class: 'tgvl' }, [...who][0]?.toUpperCase() || ''), h('span', { class: 'tgvpi', html: mediaIcon('play', 15) }));
   const dur = h('span', { class: 'tgvd' }, clock(m.duration || 0));
   const el = h('div', { class: 'tgvoice' + (m.unlistened ? ' new' : '') }, btn, h('div', { class: 'grow' }, bars, dur), me?.premium ? trButton(m) : '');
   const key = `${cur}:${m.id}`;
   const ui = (on, k, t) => {
-    btn.innerHTML = mediaIcon(on ? 'pause' : 'play', 15);
+    btn.querySelector('.tgvpi').innerHTML = mediaIcon(on ? 'pause' : 'play', 15);
+    btn.classList.toggle('on', !!on);
     const lit = Math.round(k * n);
     $$('i', bars).forEach((b, i) => b.classList.toggle('lit', i < lit));
     dur.textContent = clock(on || k > 0 ? t || 0 : m.duration || 0);
@@ -581,13 +624,22 @@ function imageEl(m) {
   const img = h('img', { class: m.kind === 'sticker' ? 'tgstk' : 'tgimg', alt: '' });
   if (m.kind === 'photo' && m.w && m.h) { const k = Math.min(240 / m.w, 220 / m.h); img.style.width = Math.round(m.w * k) + 'px'; img.style.height = Math.round(m.h * k) + 'px'; }
   blobFor(m, true).then((u) => { if (u) img.src = u; }).catch(() => {});
-  if (m.kind === 'photo') img.onclick = async () => {
-    const u = await blobFor(m).catch(() => null);
-    if (!u) return;
-    const ov = h('div', { class: 'tgview', onclick: () => ov.remove() }, h('img', { src: u }));
-    $('.tgchat', root).append(ov);
-  };
+  if (m.kind === 'photo') img.onclick = async () => openPhoto(m);
   return img;
+}
+// a photo / video opens over the whole island: zoom with the wheel or a double click, drag to look around
+async function openPhoto(m) {
+  const host = root.closest('.v-open') || root;
+  const thumb = await blobFor(m, true).catch(() => null);
+  openMediaView(host, { kind: m.kind, thumb, full: () => blobFor(m), save: async () => { const f = await api.invoke('tg:save', cur, m.id).catch(() => null); if (f) ctx.flash({ icon: '💾', title: 'Сохранено', ms: 1800 }); } });
+}
+// a video / GIF in the chat: its preview with a play mark; a click plays it big
+function videoEl(m) {
+  const box = h('div', { class: 'tgvid' }, h('span', { class: 'tgvplay', html: icon('play', 18) }), m.duration ? h('span', { class: 'tgvdur' }, clock(m.duration)) : '');
+  if (m.w && m.h) { const k = Math.min(240 / m.w, 200 / m.h); box.style.width = Math.round(m.w * k) + 'px'; box.style.height = Math.round(m.h * k) + 'px'; }
+  blobFor(m, true).then((u) => { if (u) { box.style.backgroundImage = `url('${u}')`; box.classList.add('in'); } }).catch(() => {});
+  box.onclick = () => openPhoto(m);
+  return box;
 }
 
 function bumpDialog(peer, m) {
@@ -633,7 +685,7 @@ export default {
     bus.on('tg-new', ({ peer, msg }) => {
       if (!msg) return;
       if (peer === cur && !msgs.some((x) => x.id === msg.id)) {
-        msgs.push(msg); renderMessages(false);
+        appendMessage(msg);
         if (!msg.out && root.closest('.page')?.classList.contains('on')) api.invoke('tg:read', peer).catch(() => {});
       }
       bumpDialog(peer, msg);

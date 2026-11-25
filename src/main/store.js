@@ -28,7 +28,7 @@ const DEFAULT_SETTINGS = {
   },
   tabs: [
     { id: 'home', on: true }, { id: 'clip', on: true }, { id: 'ai', on: true },
-    { id: 'text', on: true }, { id: 'notes', on: true }, { id: 'weather', on: true },
+    { id: 'text', on: true }, { id: 'notes', on: true }, { id: 'calendar', on: true }, { id: 'phone', on: true }, { id: 'weather', on: true },
     { id: 'control', on: true }, { id: 'tg', on: true }, { id: 'settings', on: true },
   ],
   home: [
@@ -49,7 +49,8 @@ const DEFAULT_SETTINGS = {
   downloadsDir: '',
   hotkeys: { palette: 'Alt+Space', themeToggle: 'Alt+Shift+D', region: 'Alt+Shift+S', island: 'Alt+Shift+Space' },
   dnd: false,
-  notifications: { windows: true, telegram: false, agentsBypassDnd: true },
+  phone: { enabled: true, askOnConnect: true },  // the phone over a USB cable: photos to the computer, files to the phone
+  notifications: { windows: true, telegram: false, agentsBypassDnd: true, capsLock: true, numLock: false },
   telegram: { apiId: '', apiHash: '', session: '', onlyPrivate: true },
   // the mini Telegram in the island: its own look, not a copy of Telegram
   tgui: { accent: '#7c5cff', bubbles: 'round', size: 'm', wallpaper: 'theme', avatars: true, openOnClick: true },
@@ -101,6 +102,16 @@ module.exports = {
     if (Array.isArray(tabs) && !tabs.some((t) => t.id === 'tg')) {
       const i = tabs.findIndex((t) => t.id === 'settings');
       tabs.splice(i < 0 ? tabs.length : i, 0, { id: 'tg', on: true });
+      stores.settings.save();
+    }
+    if (Array.isArray(tabs) && !tabs.some((t) => t.id === 'phone')) {
+      const i = tabs.findIndex((t) => t.id === 'weather');
+      tabs.splice(i < 0 ? tabs.length : i, 0, { id: 'phone', on: true });
+      stores.settings.save();
+    }
+    if (Array.isArray(tabs) && !tabs.some((t) => t.id === 'calendar')) {
+      const i = tabs.findIndex((t) => t.id === 'notes');
+      tabs.splice(i < 0 ? tabs.length : i + 1, 0, { id: 'calendar', on: true });
       stores.settings.save();
     }
     stores.clips = new Store('clipboard', { items: [] });

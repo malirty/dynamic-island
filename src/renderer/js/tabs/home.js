@@ -1,5 +1,5 @@
 import { api, bus, state, $, $$, h, esc, icon, mediaIcon, clock, ago, bytes, wmo, saveSettings, glyphTile, setProgress, setPP } from '../core.js';
-import { eyesHTML } from '../characters.js';
+import { npWindik } from '../npwindik.js';
 
 export const QUICK = {
   region: { label: 'Область', icon: 'region', run: () => api.invoke('capture:start', 'region') },
@@ -39,7 +39,24 @@ function playerW() {
       <div class="vol" title="Громкость только этого плеера — остальной звук не меняется">${icon('volume', 16)}<input type="range" class="slider" min="0" max="1" step="0.01" value="1"><span class="small vv" style="width:34px;text-align:right">100%</span></div>
     </div>
     <div class="lyr"><div class="lyrics"><div class="lines"></div></div></div>`;
-  const noplay = h('div', { class: 'noplay', html: `${eyesHTML('np')}<div><div style="font-weight:650;color:var(--fg)">Сейчас ничего не играет</div><div class="small">Включи музыку в любом плеере — остров оживёт</div></div>` });
+  const noplay = h('div', { class: 'noplay', html: `<span class="npslot"></span><div><div style="font-weight:650;color:var(--fg)">Сейчас ничего не играет</div><div class="small">Включи музыку в любом плеере — остров оживёт</div></div>` });
+  // nothing playing: the player's own Windik (js/npwindik.js) dozes in headphones waiting for music
+  const npw = npWindik();
+  $('.npslot', noplay).append(npw);
+  // his size follows the card (he takes no height of his own, so he can't make the card taller);
+  // in a tall card (a stretched island) he stands over the words in the middle
+  new ResizeObserver(() => {
+    if (!noplay.parentNode) return;
+    const hh = w.clientHeight;
+    if (!hh) return;
+    const tall = hh > 150;
+    noplay.classList.toggle('tall', tall);
+    const sz = Math.round(tall ? Math.min(150, hh * 0.42) : Math.max(44, Math.min(72, hh - 18)));
+    npw.style.setProperty('--s', sz + 'px');
+    const slot = $('.npslot', noplay);
+    slot.style.width = sz + 'px';
+    slot.style.height = tall ? Math.round(sz * 0.95) + 'px' : '';
+  }).observe(w);
   for (const b of $$('[data-c]', w)) b.onclick = () => {
     if (b.dataset.c === 'toggle') setPP(b, !state.media?.playing, 23, 1500); // show the new state at once
     api.invoke('media:cmd', b.dataset.c);
@@ -50,13 +67,10 @@ function playerW() {
     if (m.canSeek && m.duration) { const k = (e.clientX - r.left) / r.width; setProgress(e.currentTarget, k); api.invoke('media:cmd', 'seek', { position: k * m.duration }); }
   };
   const vol = $('input', w);
-  let volT;
-  vol.oninput = () => {
-    vol.style.setProperty('--v', vol.value);
-    $('.vv', w).textContent = Math.round(vol.value * 100) + '%';
-    clearTimeout(volT);
-    volT = setTimeout(() => api.invoke('media:setAppVolume', +vol.value), 40);
-  };
+  // the sound follows the slider while you drag it (the island sends only the newest value while
+  // the previous one is still being set, so nothing piles up)
+  const showVol = () => { vol.style.setProperty('--v', vol.value); $('.vv', w).textContent = Math.round(vol.value * 100) + '%'; };
+  vol.oninput = () => { showVol(); api.invoke('media:setAppVolume', +vol.value); };
   let key = '';
   function update() {
     const m = state.media;
@@ -76,13 +90,14 @@ function playerW() {
       $('.t', w).textContent = m.title;
       $('.a', w).textContent = [m.artist, m.album].filter(Boolean).join(' — ');
       $('.src', w).innerHTML = `${icon('volume', 12)} ${esc(m.app || '')}`;
-      api.invoke('media:appVolume').then((v) => { if (v != null) { vol.value = v; vol.oninput(); } });
+      api.invoke('media:appVolume').then((v) => { if (v != null) { vol.value = v; showVol(); } }); // just shows it, sets nothing
       renderLyrics();
     }
     setPP($('[data-c="toggle"]', w), m.playing, 23);
     $('.pos', w).textContent = clock(m.position || 0);
     $('.dur', w).textContent = clock(m.duration || 0);
     setProgress($('.track', w), m.duration ? m.position / m.duration : 0);
+    $('.prog', w)?.classList.toggle('notime', !m.duration); // no track length from the player: no made-up times
     syncLyrics();
   }
   let lyrKey = '';
@@ -284,6 +299,9 @@ const WIDGETS = { player: playerW, actions: actionsW, weather: weatherW, shelf: 
 
 function render() {
   const grid = $('.home', root);
+  const look = state.settings.homeLook || {};
+  grid.classList.toggle('fill', look.fill !== false); // the tiles grow to the island's whole height
+  grid.classList.toggle('nochar', look.npChar === false);
   grid.innerHTML = '';
   const els = [];
   els.push(callEl ||= callW()); // one card for the app's life, shown only while a call is on
@@ -294,6 +312,35 @@ function render() {
   grid.classList.add('stagger');
   grid.append(...els);
   if (!els.length) grid.append(h('div', { class: 'empty w wide' }, 'Главная пуста — добавь виджеты в настройках'));
+  requestAnimationFrame(() => fillRows(true));
+}
+
+// No hole at the end of a row: when the last card of a row leaves room on its right (a wide card
+// alone on the last row, say), it stretches to the edge. Worked out again whenever the columns change.
+let fillSig = '';
+function fillRows(force) {
+  const grid = $('.home', root);
+  if (!grid?.offsetWidth) return;
+  const cs = getComputedStyle(grid);
+  const cols = cs.gridTemplateColumns.split(' ').length;
+  const cards = [...grid.children].filter((c) => c.offsetWidth);
+  const sig = cols + ':' + cards.length + ':' + cards.map((c) => c.className).join('|');
+  if (!force && sig === fillSig) return;
+  fillSig = sig;
+  for (const c of cards) c.style.gridColumn = '';
+  if (cols < 2) return;
+  const gap = parseFloat(cs.columnGap) || 0;
+  const left = Math.min(...cards.map((c) => c.offsetLeft)), width = grid.clientWidth;
+  const cw = (width - gap * (cols - 1)) / cols;
+  const rows = new Map();
+  for (const c of cards) { // the rightmost card of each row
+    const cur = rows.get(c.offsetTop);
+    if (!cur || c.offsetLeft > cur.offsetLeft) rows.set(c.offsetTop, c);
+  }
+  for (const c of rows.values()) {
+    const room = left + width - (c.offsetLeft + c.offsetWidth);
+    if (room > cw * 0.5) c.style.gridColumn = `${Math.round((c.offsetLeft - left) / (cw + gap)) + 1} / -1`;
+  }
 }
 
 export default {
@@ -302,9 +349,16 @@ export default {
     ctx = c; root = el;
     el.innerHTML = '<div class="pin"><div class="home"></div></div>';
     render();
-    let sig = JSON.stringify([state.settings.home, state.settings.quickActions]);
+    new ResizeObserver(() => fillRows()).observe($('.home', el));
+    // "Перевод" (translate a screen area) joins the quick actions once, right after "Текст"
+    const qa = state.settings.quickActions;
+    if (qa && !state.settings.qaTranslateAdded) {
+      if (!qa.includes('translate')) qa.splice(qa.includes('ocr') ? qa.indexOf('ocr') + 1 : qa.length, 0, 'translate');
+      state.settings.qaTranslateAdded = true; saveSettings(); render();
+    }
+    let sig = JSON.stringify([state.settings.home, state.settings.quickActions, state.settings.homeLook]);
     bus.on('settings', () => {
-      const s = JSON.stringify([state.settings.home, state.settings.quickActions]);
+      const s = JSON.stringify([state.settings.home, state.settings.quickActions, state.settings.homeLook]);
       if (s !== sig) { sig = s; render(); }
     });
     bus.on('drop-open', ({ paths, target }) => { if (paths.length && (target.closest?.('.shelfw') || target.closest?.('.page[data-id="home"]'))) api.invoke('shelf:add', paths).then(() => ctx.flash({ icon: '📥', title: paths.length > 1 ? `На полке: ${paths.length} файла` : 'Файл на полке', ms: 1600 })); });

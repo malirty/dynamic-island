@@ -66,9 +66,12 @@ module.exports = function createTelegram({ settings, emit, onVoice = () => {} })
     return !!d?.attributes?.some((a) => (a.className === 'DocumentAttributeAudio' && a.voice) || (a.className === 'DocumentAttributeVideo' && a.roundMessage));
   };
   async function reportVoice(m, users = []) {
-    const uid = m.fromId?.userId ?? m.peerId?.userId;
-    let u = uid != null ? users.find((x) => String(x.id) === String(uid)) : null;
-    if (!u && m.out) u = await client.getMe().catch(() => null);
+    let u = null;
+    if (m.out) u = await client.getMe().catch(() => null);
+    else {
+      const uid = m.fromId?.userId ?? m.peerId?.userId;
+      u = uid != null ? users.find((x) => String(x.id) === String(uid)) : null;
+    }
     if (!u) u = await m.getSender?.().catch(() => null);
     const round = m.media.document.attributes.some((a) => a.className === 'DocumentAttributeVideo');
     onVoice({ name: m.out ? 'Ты' : nameOf(u), avatar: await avatarOf(u), kind: round ? 'Кружок' : 'Голосовое сообщение', at: Date.now() });
@@ -89,7 +92,9 @@ module.exports = function createTelegram({ settings, emit, onVoice = () => {} })
         const name = nameOf(sender);
         emit('notification', {
           kind: 'telegram', app: 'Telegram', logoHint: 'Telegram', tgPeer: peer, thumb: (await avatarOf(sender)) || undefined, title: chat?.title ? `${name} · ${chat.title}` : name,
-          body: m.message || (isVoice(m) ? 'Голосовое сообщение' : m.media ? 'Вложение' : ''), at: Date.now(),
+          body: m.message || '', at: Date.now(),
+          ...(m.media && !isVoice(m) ? { tgMsgId: m.id, media: kindOf(m) } : {}),
+          ...(isVoice(m) ? (() => { const at = m.media.document.attributes || []; const a = at.find((x) => x.className === 'DocumentAttributeAudio') || at.find((x) => x.className === 'DocumentAttributeVideo'); return { tgMsgId: m.id, voice: at.some((x) => x.className === 'DocumentAttributeVideo' && x.roundMessage) ? 'round' : 'voice', duration: a?.duration || 0 }; })() : {}),
         });
       } catch {}
     }, new NewMessage({}));
@@ -130,7 +135,8 @@ module.exports = function createTelegram({ settings, emit, onVoice = () => {} })
       const { Api } = lib();
       const r = await client.invoke(new Api.messages.SearchGlobal({ q: '', filter: new Api.InputMessagesFilterVoice(), minDate: 0, maxDate: 0, offsetRate: 0, offsetPeer: new Api.InputPeerEmpty(), offsetId: 0, limit: 1 }));
       const m = r?.messages?.[0];
-      if (m && isVoice(m)) await reportVoice(m, r.users || []);
+      const fresh = m && Date.now() / 1000 - (m.date || 0) < 10 * 60;
+      if (m && isVoice(m) && fresh) await reportVoice(m, r.users || []);
     } catch {}
   }
 
@@ -282,7 +288,7 @@ module.exports = function createTelegram({ settings, emit, onVoice = () => {} })
       return shape(m);
     },
     // who I am (and whether I have Telegram Premium)
-    async me() { need(); const u = await client.getMe(); return { id: String(u.id), name: nameOf(u), premium: !!u.premium }; },
+    async me() { need(); const u = await client.getMe(); return { id: String(u.id), name: nameOf(u), premium: !!u.premium, avatar: (await avatarOf(u)) || null }; },
     async react(peer, id, emoji) {
       need();
       const { Api } = lib();

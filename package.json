@@ -1,14 +1,16 @@
 {
   "name": "dynamic-island-windows",
   "productName": "Island",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Dynamic Island для Windows: живая пилюля сверху экрана с плеером, буфером, ИИ, погодой и центром управления",
   "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "electron . --dev"
+    "dev": "electron . --dev",
+    "server": "node server",
+    "dist": "electron-builder --win nsis --x64"
   },
-  "author": "",
+  "author": "malirty",
   "license": "MIT",
   "dependencies": {
     "jsqr": "1.4.0",
@@ -16,9 +18,52 @@
     "telegram": "2.26.22"
   },
   "devDependencies": {
-    "electron": "33.2.1"
+    "electron": "33.2.1",
+    "electron-builder": "25.1.8"
   },
   "allowScripts": {
     "electron@33.2.1": true
+  },
+  "build": {
+    "appId": "com.malirty.island",
+    "productName": "Island",
+    "copyright": "MIT",
+    "directories": {
+      "output": "dist"
+    },
+    "npmRebuild": false,
+    "asar": false,
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json",
+      "!server/**",
+      "!**/*.map",
+      "!dist/**",
+      "!out/**"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "artifactName": "Island-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Island",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "runAfterFinish": true
+    }
   }
 }

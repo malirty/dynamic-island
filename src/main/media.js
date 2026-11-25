@@ -27,7 +27,7 @@ function prettyApp(aumid = '') {
 // a voice message without the sender's photo gets the Telegram logo as its cover
 const TG_LOGO = 'data:image/svg+xml;base64,' + Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2AABEE"/><stop offset="1" stop-color="#229ED9"/></linearGradient></defs><rect width="240" height="240" fill="url(#g)"/><path fill="#fff" d="M54.3 118.8c35-15.2 58.3-25.3 70-30.2 33.3-13.9 40.3-16.3 44.8-16.4 1 0 3.2.2 4.7 1.4 1.2 1 1.5 2.3 1.7 3.3s.4 3.1.2 4.7c-1.8 19-9.6 65.1-13.6 86.3-1.7 9-5 12-8.2 12.3-7 .6-12.3-4.6-19-9-10.6-6.9-16.5-11.2-26.8-18-11.9-7.8-4.2-12.1 2.6-19.1 1.8-1.8 32.5-29.8 33.1-32.3.1-.3.1-1.5-.6-2.1-.7-.6-1.7-.4-2.5-.2-1.1.2-17.9 11.4-50.6 33.5-4.8 3.3-9.1 4.9-13 4.8-4.3-.1-12.5-2.4-18.7-4.4-7.5-2.4-13.5-3.7-13-7.9.3-2.2 3.3-4.4 8.9-6.7z"/></svg>').toString('base64');
 
-module.exports = function createMedia({ emit, log = () => {}, onVoiceStart = () => {}, callProcs = () => [] }) {
+module.exports = function createMedia({ emit, log = () => {}, onVoiceStart = () => {}, callProcs = () => [], gameProcs = () => [], looksLikeGame = () => false }) {
   // who sent the Telegram voice message that is playing (from telegram.js, when signed in)
   let voice = null;
   let state = { active: false };
@@ -36,6 +36,7 @@ module.exports = function createMedia({ emit, log = () => {}, onVoiceStart = () 
   let lyrics = null;
   let busy = false;
   let voiceAsked = false;
+  let trackStart = 0; // when the current track appeared
   // browsers update the SMTC timeline rarely; after a seek we trust our own position
   // until the player reports a newer one
   let seekTo = null;
@@ -72,15 +73,16 @@ module.exports = function createMedia({ emit, log = () => {}, onVoiceStart = () 
   // short dings (notifications) don't count: the sound has to go on for about a second.
   const QUIET_APPS = new Set(['audiodg', 'electron', 'island', 'explorer', 'shellexperiencehost', 'systemsettings', 'svchost', 'searchhost', 'startmenuexperiencehost', 'lockapp']);
   let loudSince = 0, loudLast = 0, loudApp = null;
-  let tgLoudAt = 0, tgPlayStart = 0;
+  let tgLoudAt = 0, tgPlayStart = 0, tgSeenIdle = false; // tgSeenIdle: we have seen Telegram not playing at least once
   let forced = null; // { playing, until }: right after a button press the island trusts the press, not the lagging status // when Telegram was last heard / said it started playing
   async function loudNow() {
     let list = [];
     try { list = helper.arr(await helper.fast('loud', {}, 3000)); } catch {}
     const now = Date.now();
     if (list.some((x) => /telegram/i.test(x.name || '') && x.peak > 0.01)) tgLoudAt = now;
-    const inCall = new Set(callProcs()); // Zoom on a call is the call, not "Zoom is playing sound"
-    const top = list.filter((x) => x.name && !QUIET_APPS.has(x.name.toLowerCase()) && !inCall.has(x.name.toLowerCase()) && x.peak > 0.01).sort((a, b) => b.peak - a.peak)[0];
+    // Zoom on a call is the call, not "Zoom is playing sound"; a game is a game, not a player
+    const inCall = new Set([...callProcs(), ...gameProcs()]);
+    const top = list.filter((x) => x.name && !QUIET_APPS.has(x.name.toLowerCase()) && !inCall.has(x.name.toLowerCase()) && !looksLikeGame(x.name) && x.peak > 0.01).sort((a, b) => b.peak - a.peak)[0];
     if (top) {
       if (!loudApp || loudApp.name !== top.name) { loudApp = top; loudSince = now; }
       loudLast = now;
@@ -131,11 +133,15 @@ module.exports = function createMedia({ emit, log = () => {}, onVoiceStart = () 
         if (processMatchFor(s.app).includes('telegram')) {
           await loudNow();
           if (!tgPlayStart) tgPlayStart = Date.now();
-          if (Date.now() - Math.max(tgLoudAt, tgPlayStart) > 3000) s.status = 'Paused'; // speech has pauses: 3 s of silence
+          // a voice message started while we watch gets 3 s of grace before silence counts; one that was
+          // already "playing" when the island started (Telegram keeps that flag on a paused voice for ages)
+          // counts only with real sound - otherwise every restart showed an old voice message for a moment
+          const grace = tgSeenIdle ? tgPlayStart : 0;
+          if (Date.now() - Math.max(tgLoudAt, grace) > 3000) s.status = 'Paused'; // speech has pauses: 3 s of silence
         }
         loudApp = null; loudSince = 0;
       }
-      if (!rawTgPlaying) tgPlayStart = 0;
+      if (!rawTgPlaying) { tgPlayStart = 0; tgSeenIdle = true; }
       if (forced && Date.now() < forced.until && s?.active) s.status = forced.playing ? 'Playing' : 'Paused';
       if (!s?.active) {
         voiceAsked = false;
@@ -165,6 +171,7 @@ module.exports = function createMedia({ emit, log = () => {}, onVoiceStart = () 
       const wasActive = state.active && !state.soundOnly, prevKey = state.key;
       if (key !== trackKey) {
         trackKey = key;
+        trackStart = Date.now();
         thumb = null;
         lyrics = null;
         if (untitled && s.isTg) thumb = s.voiceAvatar || TG_LOGO; // the sender's photo, or the Telegram logo
@@ -174,12 +181,22 @@ module.exports = function createMedia({ emit, log = () => {}, onVoiceStart = () 
           if (!t?.thumb) { await new Promise((r) => setTimeout(r, 900)); t = await helper.fast('media', { thumb: true }, 8000); }
           thumb = t?.thumb ? `data:image/png;base64,${t.thumb}` : null;
         } catch {}
+        if (!thumb && processMatchFor(s.app).includes('telegram')) thumb = TG_LOGO;
         if (untitled) { lyrics = null; emit('lyrics', { key: trackKey, lyrics }); } else fetchLyrics(s); // no lyrics for a voice message
       }
       if (untitled && s.isTg) thumb = s.voiceAvatar || TG_LOGO; // the photo can arrive after the name
       // SMTC position is only refreshed sporadically; extrapolate from its timestamp.
       let position = s.position || 0;
-      if (s.status === 'Playing' && s.updated) position += Math.max(0, (Date.now() - s.updated) / 1000);
+      // only a real, recent timestamp: some players (YouTube in a browser) leave it empty, which Windows
+      // reports as the year 1601 - counting from that gave "3733125:09:07"
+      const fresh = s.updated && s.updated <= Date.now() + 5000 && Date.now() - s.updated < 6 * 3600e3;
+      if (s.status === 'Playing' && fresh) position += Math.max(0, (Date.now() - s.updated) / 1000);
+      if (!(position >= 0) || position > 48 * 3600 || (!s.duration && !fresh)) position = 0;
+      // Browsers update the timeline late: right after "next" the new title arrives with the old
+      // track's time. A timeline older than the track change belongs to the previous song.
+      if (trackStart && (!s.updated || s.updated < trackStart - 300) && Date.now() - trackStart < 15000 && position > (Date.now() - trackStart) / 1000 + 2) {
+        position = s.status === 'Playing' ? (Date.now() - trackStart) / 1000 : 0;
+      }
       if (seekTo) {
         if (key !== seekTo.key || (s.updated && s.updated > seekTo.at + 300)) seekTo = null; // the player caught up
         else position = seekTo.pos + (s.status === 'Playing' ? (Date.now() - seekTo.at) / 1000 : 0);
@@ -221,14 +238,15 @@ module.exports = function createMedia({ emit, log = () => {}, onVoiceStart = () 
       return r;
     },
     async appVolume() {
-      const list = helper.arr(await helper.fast('sessions'));
+      const list = helper.arr(await helper.audio('sessions'));
       const m = state.appMatch || '';
       if (!m) return null;
       const s = list.find((x) => x.name && (x.name.toLowerCase().includes(m) || m.includes(x.name.toLowerCase())));
       return s ? s.volume : null;
     },
     setAppVolume(level) {
-      return helper.fast('setAppVolume', { match: state.appMatch || '', level });
+      const match = state.appMatch || '';
+      return helper.latest('appvol:' + match, () => helper.audio('setAppVolume', { match, level }));
     },
   };
 };

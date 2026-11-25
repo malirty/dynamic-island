@@ -86,14 +86,38 @@ class Helper {
 // PowerShell unrolls one-element arrays and turns empty arrays into null.
 const arr = (v) => (v == null ? [] : Array.isArray(v) ? v : [v]);
 
-let fast, slow;
+// While a call for some key is running, only the newest call waiting after it is kept (the ones in
+// between are dropped): dragging a volume slider sends a stream of values, and they used to pile up and
+// play out one by one long after you let go.
+const lanes = new Map();
+function pump(l) {
+  if (l.busy || !l.next) return;
+  const job = l.next; l.next = null; l.busy = true;
+  Promise.resolve().then(job.run).then(job.res, job.rej).finally(() => { l.busy = false; pump(l); });
+}
+function latest(key, run) {
+  let l = lanes.get(key);
+  if (!l) lanes.set(key, (l = { busy: false, next: null }));
+  return new Promise((res, rej) => {
+    if (l.next) l.next.res(null); // overtaken by a newer value
+    l.next = { run, res, rej };
+    pump(l);
+  });
+}
+
+let fast, slow, audio;
 module.exports = {
   init() {
     fast = new Helper('fast');
     slow = new Helper('slow');
+    // sound volumes get a process of their own: on the shared "fast" one they waited behind the
+    // media polling (which can take a second), so a slider only took effect a moment after you let go
+    audio = new Helper('audio');
   },
   fast: (cmd, args, t) => fast.call(cmd, args, t),
   slow: (cmd, args, t) => slow.call(cmd, args, t ?? 60000),
+  audio: (cmd, args, t) => (audio || fast).call(cmd, args, t ?? 5000),
+  latest,
   arr,
-  stop() { fast?.stop(); slow?.stop(); },
+  stop() { fast?.stop(); slow?.stop(); audio?.stop(); },
 };

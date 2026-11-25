@@ -2,7 +2,7 @@
 // membrane): the cursor pulls the edge toward itself, entering the island sends
 // a ripple around it, and bass beats shake the bottom edge and spread glowing
 // rings below. The same shape clips the island body and is drawn as its glow.
-import { state, bus } from './core.js';
+import { state, bus, frozen } from './core.js';
 import { getDrops, overBubble } from './bubbles.js';
 
 const isl = document.getElementById('island');
@@ -86,9 +86,18 @@ function rrPoint(w, h, r, s) {
   }
 }
 
+let islW = 0, islH = 0, islR = 0;
+new ResizeObserver((ents) => {
+  for (const e of ents) {
+    const b = e.borderBoxSize?.[0];
+    islW = b ? b.inlineSize : isl.offsetWidth; islH = b ? b.blockSize : isl.offsetHeight;
+    islR = parseFloat(getComputedStyle(isl).borderTopLeftRadius) || islH / 2;
+  }
+}).observe(isl);
 function geometry() {
-  const w = isl.offsetWidth, h = isl.offsetHeight;
-  const r = Math.min(parseFloat(getComputedStyle(isl).borderTopLeftRadius) || h / 2, h / 2, w / 2);
+  if (!islW) { islW = isl.offsetWidth; islH = isl.offsetHeight; islR = parseFloat(getComputedStyle(isl).borderTopLeftRadius) || islH / 2; }
+  const w = islW, h = islH;
+  const r = Math.min(islR || h / 2, h / 2, w / 2);
   const key = `${w}|${h}|${r.toFixed(1)}`;
   const changed = key !== geoKey;
   if (changed) {
@@ -138,7 +147,7 @@ function kick(center, amount, spread) {
 // One fixed 60 fps step (k = 1). Larger steps make the explicit spring
 // integration unstable and the edge turns into a saw tooth.
 function step(now, w, h, first) {
-  const on = state.settings?.theme?.water !== false;
+  const on = state.settings?.theme?.water !== false && !frozen(); // locked: a calm edge
   const p = local();
   const k = 1;
   const isIn = p.x >= 0 && p.x <= w && p.y >= 0 && p.y <= h;
@@ -410,17 +419,27 @@ function draw(now, dt, w, h, pts) {
   g.restore();
 }
 
+// Frame budget: the outline never needs more than 60 fps (monitors at 120-165 Hz doubled the work),
+// and while the surface only breathes slowly (no ripples, nothing pulling at it) 30 fps look the same.
+let calmFor = 0;
+const wprof = { n: 0, sim: 0, clip: 0, draw: 0 }; // dev aid: where a frame of the edge goes (window.__water.prof)
 function loop(now) {
   requestAnimationFrame(loop);
+  if (document.hidden) return;
+  if (now - last < (calmFor > 800 ? 32 : 15.5)) return;
   const dt = Math.min(50, now - last);
   last = now;
-  if (document.hidden) return;
   if (++frame % 30 === 1) readColors();
   const { w, h, changed } = geometry();
   if (!N) return;
   if (changed) { for (let i = 0; i < N; i++) { d[i] *= 0.9; v[i] *= 0.7; } } // calm the surface while the island resizes
+  const tA = performance.now();
   const steps = Math.max(1, Math.min(4, Math.round(dt / 16.7)));
   for (let s = 0; s < steps; s++) step(now, w, h, s === 0);
+  let energy = 0;
+  for (let i = 0; i < N; i++) energy += Math.abs(v[i]);
+  calmFor = !changed && !ripples.length && energy / N < 0.02 ? calmFor + dt : 0;
+  const tB = performance.now();
   const pts = points();
   body.style.clipPath = clipString(pts);
   // the content (cards, text) follows the same liquid outline, so no corners poke out.
@@ -441,7 +460,9 @@ function loop(now) {
     const c = name === 'open' ? oclip : vclip;
     if (v.style.clipPath !== c) v.style.clipPath = c;
   }
+  const tC = performance.now();
   draw(now, dt, w, h, pts);
+  wprof.n++; wprof.sim += tB - tA; wprof.clip += tC - tB; wprof.draw += performance.now() - tC;
 }
 
 export function initWater() {
@@ -469,5 +490,5 @@ export function initWater() {
   readColors();
   requestAnimationFrame(loop);
   // dev aid for --debug-shots: inspect the membrane / fake the cursor
-  window.__water = { stats: () => { let jag = 0; for (let i = 0; i < N; i++) jag = Math.max(jag, Math.abs(d[i] - (d[(i - 1 + N) % N] + d[(i + 1) % N]) / 2)); return { max: Math.max(...d), min: Math.min(...d), N, jag }; }, cursor: (x, y) => { cursor = { x, y }; }, beat: onBeat, level: (l) => { state.level = l; } };
+  window.__water = { prof: wprof, stats: () => { let jag = 0; for (let i = 0; i < N; i++) jag = Math.max(jag, Math.abs(d[i] - (d[(i - 1 + N) % N] + d[(i + 1) % N]) / 2)); return { max: Math.max(...d), min: Math.min(...d), N, jag }; }, cursor: (x, y) => { cursor = { x, y }; }, beat: onBeat, level: (l) => { state.level = l; } };
 }

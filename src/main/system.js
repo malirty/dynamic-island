@@ -149,20 +149,41 @@ function createToastWatcher({ state, emit, enabled }) {
     if (/^\w+\.\w+/.test(n)) n = n.split('.').filter((x) => !/^(microsoft|windows|desktop|app)$/i.test(x)).pop() || n;
     return n;
   }
+  // the sender's picture that the app put in the notification (Discord: the avatar, saved in Temp)
+  function imageOf(xml) {
+    const imgs = [...xml.matchAll(/<image\b([^>]*)>/g)].map((m) => ({ src: (/src="([^"]*)"/.exec(m[1]) || [])[1] || '', logo: /appLogoOverride/i.test(m[1]) }));
+    const pick = imgs.find((x) => x.logo) || imgs[0];
+    if (!pick?.src) return null;
+    let file = decode(pick.src).replace(/^file:\/\/\/?/i, '');
+    try { file = decodeURIComponent(file); } catch {}
+    if (/^https?:/i.test(file)) return null;
+    try {
+      const st = fs.statSync(file);
+      if (!st.isFile() || st.size > 3e6) return null;
+      const ext = path.extname(file).slice(1).toLowerCase();
+      const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'gif' ? 'image/gif' : ext === 'webp' ? 'image/webp' : 'image/png';
+      return `data:${mime};base64,${fs.readFileSync(file).toString('base64')}`;
+    } catch { return null; }
+  }
   async function poll() {
     if (!enabled() || !fs.existsSync(db)) return;
     try {
-      const rows = helper.arr(await helper.fast('toasts', { db, last: state.data.lastToastId || 0 }, 4000));
-      if (!rows.length) { primed = true; return; }
-      const maxId = Math.max(...rows.map((r) => r.id));
-      const fresh = primed && state.data.lastToastId ? rows.filter((r) => r.id > state.data.lastToastId) : [];
-      state.data.lastToastId = Math.max(maxId, state.data.lastToastId || 0);
+      // the id of the last notification seen; a broken value (it once got saved empty) made every read fail
+      // silently, and no notification came through any more - start over from the newest one instead
+      let last = Number(state.data.lastToastId);
+      if (!Number.isFinite(last) || last < 0) { last = 0; primed = false; }
+      const rows = helper.arr(await helper.fast('toasts', { db, last }, 4000)).filter((r) => Number.isFinite(Number(r?.id)));
+      if (!rows.length) { primed = true; if (state.data.lastToastId !== last) { state.data.lastToastId = last; state.save(); } return; }
+      const maxId = Math.max(...rows.map((r) => Number(r.id)));
+      const fresh = primed && last ? rows.filter((r) => Number(r.id) > last) : [];
+      state.data.lastToastId = Math.max(maxId, last);
       state.save();
       primed = true;
       for (const r of fresh.reverse()) {
         const texts = [...(r.xml || '').matchAll(/<text[^>]*>([\s\S]*?)<\/text>/g)].map((m) => decode(m[1]).trim()).filter(Boolean);
         if (!texts.length) continue;
-        emit({ kind: 'windows', app: appName(r.app), logoHint: r.app, title: texts[0], body: texts.slice(1).join(' · '), at: Date.now() });
+        const thumb = imageOf(r.xml || '');
+        emit({ kind: 'windows', app: appName(r.app), logoHint: r.app, title: texts[0], body: texts.slice(1).join(' · '), at: Date.now(), ...(thumb ? { thumb } : {}) });
       }
     } catch {}
   }
@@ -175,8 +196,8 @@ module.exports = {
   radios: async () => helper.arr(await helper.slow('radios').catch(() => [])),
   setRadio: (kind, on) => helper.slow('setRadio', { kind, on }),
   btDevices: async () => helper.arr(await helper.slow('btDevices', {}, 20000).catch(() => [])),
-  volume: () => helper.fast('volume'),
-  setVolume: (level) => helper.fast('setVolume', { level }),
+  volume: () => helper.audio('volume'),
+  setVolume: (level) => helper.latest('master', () => helper.audio('setVolume', { level })),
   setMute: (on) => helper.fast('setMute', { on }),
   brightness: () => helper.slow('brightness').catch(() => null),
   setBrightness: (level) => helper.slow('setBrightness', { level }).catch(() => null),

@@ -33,6 +33,7 @@ public static class IslandNative {
     [DllImport("user32.dll")] static extern bool SetProcessDPIAware();
     [DllImport("user32.dll")] static extern short GetAsyncKeyState(int vk);
     [DllImport("user32.dll")] static extern uint GetClipboardSequenceNumber();
+    [DllImport("user32.dll")] static extern short GetKeyState(int key);
 
     static Dictionary<uint, string[]> procCache = new Dictionary<uint, string[]>();
 
@@ -46,6 +47,7 @@ public static class IslandNative {
             Process p = Process.GetProcessById((int)pid);
             name = p.ProcessName;
             try { path = p.MainModule.FileName; desc = p.MainModule.FileVersionInfo.FileDescription ?? ""; } catch { }
+            if (path.Length == 0) path = PathAndStart(pid)[0];
         } catch { }
         v = new string[] { name, desc, path };
         if (procCache.Count > 400) procCache.Clear();
@@ -69,7 +71,7 @@ public static class IslandNative {
                 full = r.Left <= mi.rcMonitor.Left && r.Top <= mi.rcMonitor.Top && r.Right >= mi.rcMonitor.Right && r.Bottom >= mi.rcMonitor.Bottom;
             }
         }
-        return new string[] { h.ToInt64().ToString(), pid.ToString(), pi[0], pi[1], t.ToString(), cls, full ? "1" : "0", pi[2], GetClipboardSequenceNumber().ToString() };
+        return new string[] { h.ToInt64().ToString(), pid.ToString(), pi[0], pi[1], t.ToString(), cls, full ? "1" : "0", pi[2], GetClipboardSequenceNumber().ToString(), ((GetKeyState(0x14) & 1) != 0) ? "1" : "0", ((GetKeyState(0x90) & 1) != 0) ? "1" : "0" };
     }
 
     public static bool Focus(long hwnd) {
@@ -110,6 +112,45 @@ public static class IslandNative {
             StringBuilder t = new StringBuilder(512); GetWindowText(h, t, 512);
             StringBuilder k = new StringBuilder(256); GetClassName(h, k, 256);
             if (t.Length > 0) res.Add(h.ToInt64() + "|" + k.ToString() + "|" + t.ToString());
+            return true;
+        }, IntPtr.Zero);
+        return res.ToArray();
+    }
+
+    // Exe path and start time even for protected processes (anti-cheat games deny MainModule):
+    // PROCESS_QUERY_LIMITED_INFORMATION is enough for both.
+    [DllImport("kernel32.dll")] static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern bool QueryFullProcessImageName(IntPtr h, uint flags, StringBuilder buf, ref uint size);
+    [DllImport("kernel32.dll")] static extern bool GetProcessTimes(IntPtr h, out long create, out long exit, out long kernel, out long user);
+    public static string[] PathAndStart(uint pid) {
+        string path = "", start = "0";
+        IntPtr h = OpenProcess(0x1000, false, pid);
+        if (h == IntPtr.Zero) return new string[] { path, start };
+        try {
+            StringBuilder b = new StringBuilder(1024); uint n = 1024;
+            if (QueryFullProcessImageName(h, 0, b, ref n)) path = b.ToString();
+            long c, e, k, u;
+            if (GetProcessTimes(h, out c, out e, out k, out u) && c > 0) start = ((DateTime.FromFileTimeUtc(c) - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).Ticks / 10000).ToString();
+        } finally { CloseHandle(h); }
+        return new string[] { path, start };
+    }
+    // One line per program with a visible titled window: "hwnd|pid|class|process|exe|startMs|title"
+    public static string[] AppWindows() {
+        HashSet<uint> seen = new HashSet<uint>();
+        List<string> res = new List<string>();
+        EnumWindows(delegate (IntPtr h, IntPtr l) {
+            if (!IsWindowVisible(h)) return true;
+            uint pid; GetWindowThreadProcessId(h, out pid);
+            if (seen.Contains(pid)) return true;
+            StringBuilder t = new StringBuilder(512); GetWindowText(h, t, 512);
+            if (t.Length == 0) return true;
+            seen.Add(pid);
+            StringBuilder k = new StringBuilder(256); GetClassName(h, k, 256);
+            string name = "";
+            try { name = Process.GetProcessById((int)pid).ProcessName; } catch { }
+            string[] ps = PathAndStart(pid);
+            res.Add(h.ToInt64() + "|" + pid + "|" + k.ToString() + "|" + name + "|" + ps[0] + "|" + ps[1] + "|" + t.ToString());
             return true;
         }, IntPtr.Zero);
         return res.ToArray();
@@ -346,8 +387,20 @@ public static class IslandAudio {
         return count;
     }
 
+    // The sessions found for an app are kept for a moment: while a slider is dragged each new level is
+    // set on them at once, instead of looking all the sessions and their processes up again every time.
+    static string volMatch; static DateTime volAt; static List<ISimpleAudioVolume> volCache;
     public static int SetAppVolume(string match, float level) {
         int count = 0; match = match.ToLowerInvariant();
+        float lv = Math.Max(0f, Math.Min(1f, level));
+        if (volCache != null && volMatch == match && (DateTime.UtcNow - volAt).TotalSeconds < 3) {
+            try {
+                foreach (ISimpleAudioVolume v in volCache) { Guid g0 = Guid.Empty; v.SetMasterVolume(lv, ref g0); }
+                volAt = DateTime.UtcNow;
+                return volCache.Count;
+            } catch { volCache = null; }
+        }
+        List<ISimpleAudioVolume> found = new List<ISimpleAudioVolume>();
         Guid iid = typeof(IAudioSessionManager2).GUID; object o;
         Marshal.ThrowExceptionForHR(Speakers().Activate(ref iid, 23, IntPtr.Zero, out o));
         IAudioSessionManager2 mgr = (IAudioSessionManager2)o;
@@ -361,9 +414,11 @@ public static class IslandAudio {
             try { name = Process.GetProcessById((int)pid).ProcessName.ToLowerInvariant(); } catch { }
             if (name.Length == 0 || !(name.Contains(match) || match.Contains(name))) continue;
             Guid g = Guid.Empty;
-            ((ISimpleAudioVolume)s).SetMasterVolume(Math.Max(0f, Math.Min(1f, level)), ref g);
+            ((ISimpleAudioVolume)s).SetMasterVolume(lv, ref g);
+            found.Add((ISimpleAudioVolume)s);
             count++;
         }
+        volCache = count > 0 ? found : null; volMatch = match; volAt = DateTime.UtcNow;
         return count;
     }
 }
@@ -630,6 +685,38 @@ function Cmd-MicUsers($a) {
 # Press a real button inside an app (UI Automation): the first pattern that matches a button wins.
 # Works in the background (no focus change) for Discord, Telegram, browsers; Zoom draws its own UI.
 $script:uiaReady = $false
+# A switch-like button (Discord's mic is always named "Mute"; whether it is pressed is its toggle state):
+# 'On' / 'Off' after the app has had a moment to update, '' when the button is not a switch.
+function Get-UiaToggle($b) {
+    $tp = $null
+    if (-not $b.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$tp)) { return '' }
+    Start-Sleep -Milliseconds 250
+    try { return [string]$tp.Current.ToggleState } catch { return '' }
+}
+# Read (not press) the state of the first switch whose name matches: so the island follows a mute made in the app itself
+function Cmd-UiaToggle($a) {
+    if (-not $script:uiaReady) { Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes; $script:uiaReady = $true }
+    $AE = [System.Windows.Automation.AutomationElement]
+    $pids = @(Get-Process -Name ([string]$a.proc) -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })
+    if (-not $pids.Count) { return @{ found = $false } }
+    $roots = @()
+    if ($a.hwnd) { try { $roots += $AE::FromHandle([IntPtr][long]$a.hwnd) } catch { } }
+    if (-not $roots.Count) { $roots = @($AE::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition) | Where-Object { $pids -contains $_.Current.ProcessId }) }
+    $btnCond = New-Object System.Windows.Automation.PropertyCondition($AE::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)
+    foreach ($r in $roots) {
+        $all = @()
+        try { $all = @($r.FindAll([System.Windows.Automation.TreeScope]::Descendants, $btnCond)) } catch { }
+        foreach ($pat in @($a.names)) {
+            foreach ($b in $all) {
+                $n = [string]$b.Current.Name
+                if (-not $n -or $n -notmatch "(?i)$pat") { continue }
+                $tp = $null
+                if ($b.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$tp)) { return @{ found = $true; name = $n; state = [string]$tp.Current.ToggleState } }
+            }
+        }
+    }
+    @{ found = $false }
+}
 function Cmd-UiaPress($a) {
     if (-not $script:uiaReady) { Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes; $script:uiaReady = $true }
     $AE = [System.Windows.Automation.AutomationElement]  # not $A: PowerShell names ignore case, it would overwrite $a
@@ -646,9 +733,9 @@ function Cmd-UiaPress($a) {
             $n = [string]$b.Current.Name
             if (-not $n -or $n -notmatch "(?i)$pat" -or -not $b.Current.IsEnabled) { continue }
             $ip = $null
-            if ($b.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$ip)) { $ip.Invoke(); return @{ ok = $true; name = $n } }
+            if ($b.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$ip)) { $ip.Invoke(); return @{ ok = $true; name = $n; toggle = (Get-UiaToggle $b) } }
             $tp = $null
-            if ($b.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$tp)) { $tp.Toggle(); return @{ ok = $true; name = $n } }
+            if ($b.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$tp)) { $tp.Toggle(); return @{ ok = $true; name = $n; toggle = (Get-UiaToggle $b) } }
         }
     }
     @{ ok = $false; reason = 'not found'; buttons = $all.Count }
@@ -675,14 +762,16 @@ public static class ZoomPix {
         if (w < 300 || h < 200) return "unknown";
         using (Bitmap bmp = new Bitmap(w, h)) {
             using (Graphics g = Graphics.FromImage(bmp)) { IntPtr dc = g.GetHdc(); PrintWindow((IntPtr)hwnd, dc, 2); g.ReleaseHdc(dc); }
-            int y0 = Math.Max(0, h - 76), left = 0, right = 0;
-            int lx = Math.Min(260, w / 4), rx = w - Math.Min(320, w / 4);
+            // the toolbar strip at the bottom; the mic ("Audio") is the very first button, the camera right after
+            // it (its slash must not count), "Leave" is the red icon at the right end
+            int y0 = Math.Max(0, h - 90), mic = 0, right = 0;
+            int mx = Math.Min(118, w / 8), rx = w - Math.Min(320, w / 4);
             for (int y = y0; y < h; y++) {
-                for (int x = 0; x < lx; x += 2) { Color c = bmp.GetPixel(x, y); if (c.R > 170 && c.G < 90 && c.B < 90) left++; }
-                for (int x = rx; x < w; x += 2) { Color c = bmp.GetPixel(x, y); if (c.R > 170 && c.G < 90 && c.B < 90) right++; }
+                for (int x = 0; x < mx; x += 2) { Color c = bmp.GetPixel(x, y); if (c.R > 150 && c.G < 100 && c.B < 110 && c.R - c.G > 70) mic++; }
+                for (int x = rx; x < w; x += 2) { Color c = bmp.GetPixel(x, y); if (c.R > 150 && c.G < 100 && c.B < 110 && c.R - c.G > 70) right++; }
             }
-            if (right < 20) return "unknown"; // toolbar hidden: can't tell
-            return left >= 6 ? "muted" : "on";
+            if (right < 6) return "unknown"; // toolbar hidden: can't tell
+            return mic >= 8 ? "muted" : "on";
         }
     }
 }
@@ -690,6 +779,49 @@ public static class ZoomPix {
         $script:zoomPixReady = $true
     }
     @{ state = [ZoomPix]::State([long]$a.hwnd) }
+}
+
+# A program's icon from its exe as a PNG (up to 256 px; Electron's own getFileIcon stops at 32).
+$script:exeIconReady = $false
+# Phones and other portable devices under "This PC" (Android in File transfer mode, iPhone after "Trust")
+function Cmd-Portables($a) {
+    if (-not $script:shellApp) { $script:shellApp = New-Object -ComObject Shell.Application }
+    $out = @()
+    foreach ($i in $script:shellApp.Namespace(17).Items()) {
+        if ($i.IsFileSystem) { continue }
+        $p = [string]$i.Path
+        if ($p -notmatch '(?i)usb#|swd#|wpdbusenum') { continue }
+        $out += @{ name = [string]$i.Name; path = $p }
+    }
+    return $out
+}
+
+function Cmd-ExeIcon($a) {
+    if (-not $script:exeIconReady) {
+        Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @"
+using System;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.IO;
+using System.Runtime.InteropServices;
+public static class ExeIcon {
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern uint PrivateExtractIcons(string file, int index, int cx, int cy, IntPtr[] icons, uint[] ids, uint n, uint flags);
+    [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr h);
+    public static string Png(string file, int size) {
+        IntPtr[] hs = new IntPtr[1]; uint[] ids = new uint[1];
+        if (PrivateExtractIcons(file, 0, size, size, hs, ids, 1, 0) == 0 || hs[0] == IntPtr.Zero) return "";
+        try {
+            using (Icon ic = Icon.FromHandle(hs[0])) using (Bitmap b = ic.ToBitmap()) using (MemoryStream m = new MemoryStream()) {
+                b.Save(m, ImageFormat.Png);
+                return Convert.ToBase64String(m.ToArray());
+            }
+        } finally { DestroyIcon(hs[0]); }
+    }
+}
+"@
+        $script:exeIconReady = $true
+    }
+    @{ png = [ExeIcon]::Png([string]$a.path, [int]$a.size) }
 }
 
 # Send an app's own shortcut: bring its window forward for a moment, press, give focus back.
@@ -718,7 +850,7 @@ function Dispatch($c, $a) {
         'ping' { return @{ pong = $true } }
         'fg' {
             $f = [IslandNative]::Foreground()
-            return @{ hwnd = $f[0]; pid = [int]$f[1]; process = $f[2]; app = $f[3]; title = $f[4]; cls = $f[5]; fullscreen = ($f[6] -eq '1'); exe = $f[7]; clipSeq = [long]$f[8] }
+            return @{ hwnd = $f[0]; pid = [int]$f[1]; process = $f[2]; app = $f[3]; title = $f[4]; cls = $f[5]; fullscreen = ($f[6] -eq '1'); exe = $f[7]; clipSeq = [long]$f[8]; caps = ($f[9] -eq '1'); num = ($f[10] -eq '1') }
         }
         'focus' { return @{ ok = [IslandNative]::Focus([long]$a.hwnd) } }
         'paste' { return @{ ok = [IslandNative]::Paste([long]$a.hwnd) } }
@@ -750,7 +882,11 @@ function Dispatch($c, $a) {
         'setAppMute' { $n = [IslandAudio]::AppMute([string]$a.match, $(if ($a.on) { 1 } else { 0 })); return @{ count = $n } }
         'focusProcess' { return @{ ok = [IslandNative]::FocusProcess([string]$a.name) } }
         'uiaPress' { return Cmd-UiaPress $a }
+        'uiaToggle' { return Cmd-UiaToggle $a }
         'zoomMic' { return Cmd-ZoomMic $a }
+        'exeIcon' { return Cmd-ExeIcon $a }
+        'portables' { return @(Cmd-Portables $a) }
+        'appWindows' { return @([IslandNative]::AppWindows() | ForEach-Object { $p = $_.Split([char]'|', 7); @{ hwnd = $p[0]; pid = [int]$p[1]; cls = $p[2]; process = $p[3]; exe = $p[4]; start = [double]$p[5]; title = $p[6] } }) }
         'sendKeys' { return Cmd-SendKeys $a }
         'windowTitles' { return @([IslandNative]::WindowTitles([string]$a.name) | ForEach-Object { $p = $_.Split([char]'|', 3); @{ hwnd = [long]$p[0]; cls = $p[1]; title = $p[2] } }) }
         'procPath' { $pp = Get-Process -Name ([string]$a.name) -ErrorAction SilentlyContinue | Where-Object { $_.Path } | Select-Object -First 1; return @{ path = $(if ($pp) { $pp.Path } else { '' }) } }

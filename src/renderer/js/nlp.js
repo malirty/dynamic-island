@@ -207,7 +207,7 @@ export function parseTimer(q) {
   let m = s.match(/^(?:таймер|timer|засеки)\s*(?:на\s*)?(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(.*)$/);
   if (m) {
     const sec = m[3] ? +m[1] * 3600 + +m[2] * 60 + +m[3] : +m[1] * 60 + +m[2];
-    return { seconds: sec, text: m[4] || '' };
+    return { seconds: sec, text: m[4] ? q.trim().slice(s.length - m[4].length) : '' };
   }
   m = s.match(/^(?:таймер|timer|засеки)?\s*(?:на\s*)?((?:\d+(?:[.,]\d+)?\s*(?:секунд[а-яёa-z]*|сек|с|минут[а-яёa-z]*|мин|м|час[а-яёa-z]*|ч|h|min|sec|s)\s*)+|полчаса|час)\s*(.*)$/);
   if (!m) return null;
@@ -218,7 +218,7 @@ export function parseTimer(q) {
   else if (m[1] === 'час') sec = 3600;
   else for (const p of m[1].matchAll(/(\d+(?:[.,]\d+)?)\s*([a-zа-я]+)/g)) sec += parseFloat(p[1].replace(',', '.')) * UNIT_SEC(p[2]);
   if (!sec) return null;
-  return { seconds: Math.round(sec), text: m[2] || '' };
+  return { seconds: Math.round(sec), text: m[2] ? q.trim().slice(s.length - m[2].length) : '' };
 }
 
 export function parseReminder(q, now = new Date()) {

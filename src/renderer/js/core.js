@@ -19,6 +19,10 @@ export function saveSettings() {
 // ---------- DOM helpers ----------
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+// No active subscription: the island is frozen - the character only watches the cursor,
+// nothing else (music, calls, notifications, petting, tricks) gets a reaction.
+export const frozen = () => !!state.account && state.account.state !== 'active';
+
 export function h(tag, attrs = {}, ...kids) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {
@@ -124,6 +128,9 @@ const P = {
   trash: 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',
   copy: 'M9 9h10v11H9zM5 15V4h11',
   share: 'M14 5l6 6-6 6M20 11H10a6 6 0 0 0-6 6v2',
+  lock: 'M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3',
+  user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 20.5c1.2-3.6 4-5.5 7.5-5.5s6.3 1.9 7.5 5.5',
+  gamepad: 'M6 11h4M8 9v4M15 12h.01M18 10h.01M17.3 5H6.7a4 4 0 0 0-4 3.6l-.9 7.2A2.8 2.8 0 0 0 4.6 19c.9 0 1.7-.4 2.2-1.1L8.5 16h7l1.7 1.9c.5.7 1.3 1.1 2.2 1.1a2.8 2.8 0 0 0 2.8-3.2l-.9-7.2A4 4 0 0 0 17.3 5z',
   hangup: 'M3 14.5c4.9-4.7 13.1-4.7 18 0l-2.4 2.4a1 1 0 0 1-1.3.1l-2.3-1.6a1 1 0 0 1-.4-.9l.2-1.7a11 11 0 0 0-5.6 0l.2 1.7a1 1 0 0 1-.4.9L6.7 17a1 1 0 0 1-1.3-.1z',
   search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-3.5-3.5',
   mic: 'M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zM5 11a7 7 0 0 0 14 0M12 18v3',
@@ -161,6 +168,7 @@ const P = {
   back: 'M15 6l-6 6 6 6',
   telegram: 'M21 4L3 11.2l6 2.3L11.3 20l3.2-4.2 4.7 3.6zM9 13.5l12-9.5',
   reply: 'M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5V20',
+  calendar: 'M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM4 10h16M8 3v4M16 3v4M8 14h.01M12 14h.01M16 14h.01M8 17h.01M12 17h.01',
   edit: 'M4 20h4L19 9l-4-4L4 16zM14 6l4 4',
   folder: 'M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z',
   file: 'M6 3h8l5 5v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM14 3v5h5',
@@ -203,6 +211,8 @@ export function glyphFor(t) {
   else if (t.kind === 'reminder') g = [t.icon === '⏱' ? 'timer' : 'bell', 'amber'];
   else if (t.kind === 'rain') g = ['rain', 'blue'];
   else if (t.kind === 'call') g = ['phone', 'ok'];
+  else if (t.kind === 'phone') g = ['phone', 'blue'];
+  else if (t.kind === 'lock') g = ['keyboard', t.on ? 'amber' : 'blue'];
   else g = EMO[t.icon] || null;
   if (!g) return null;
   const [a, b] = TONES[g[1]];
@@ -253,7 +263,7 @@ export function setProgress(track, p) {
   track.style.setProperty('--p', p);
 }
 export const CHARACTERS = [['eyes', 'Глаза'], ['cat', 'Котик'], ['bunny', 'Зайка'], ['robot', 'Робот'], ['ghost', 'Призрак'], ['alien', 'Пришелец'], ['angel', 'Ангел'], ['frog', 'Лягушка'], ['devil', 'Чертёнок'], ['buddies', 'Человечки'], ['none', 'Никого']];
-export const EYE_FX = `<div class="deco"><i></i><i></i><i></i><i></i></div><div class="fx"><i class="fx-load"></i><i class="fx-rings"><b></b><b></b></i><i class="fx-bubbles"><b></b><b></b><b></b></i><i class="fx-q">?</i><i class="fx-sweat"></i><i class="fx-dots3"><b></b><b></b><b></b></i><i class="fx-orbit"><b></b><b></b><b></b></i><i class="fx-dots"><b></b><b></b><b></b></i><i class="fx-bulb"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/></svg></i><i class="fx-bang">!</i><i class="fx-call"><svg viewBox="0 0 24 24" width="9" height="9" fill="currentColor"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg><b></b><b></b></i><i class="fx-notes"><b>♪</b><b>♫</b><b>♪</b></i><i class="fx-joy"><b>✦</b><b>✦</b><b>✦</b><b>✦</b></i><i class="fx-vein"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M3 9.5c3.5 0 6.5-3 6.5-6.5M14.5 3c0 3.5 3 6.5 6.5 6.5M21 14.5c-3.5 0-6.5 3-6.5 6.5M9.5 21c0-3.5-3-6.5-6.5-6.5"/></svg></i></div>`;
+export const EYE_FX = `<div class="deco"><i></i><i></i><i></i><i></i></div><div class="fx"><i class="fx-load"></i><i class="fx-rings"><b></b><b></b></i><i class="fx-bubbles"><b></b><b></b><b></b></i><i class="fx-q">?</i><i class="fx-sweat"></i><i class="fx-dots3"><b></b><b></b><b></b></i><i class="fx-orbit"><b></b><b></b><b></b></i><i class="fx-dots"><b></b><b></b><b></b></i><i class="fx-bulb"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/></svg></i><i class="fx-bang">!</i><i class="fx-call"><svg viewBox="0 0 24 24" width="9" height="9" fill="currentColor"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg><b></b><b></b></i><i class="fx-msg"><b></b><b></b><b></b></i><i class="fx-done"><svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" pathLength="1"/></svg></i><i class="fx-game"><svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 11h4M8 9v4M15 12h.01M18 10h.01M17.3 5H6.7a4 4 0 0 0-4 3.6l-.9 7.2A2.8 2.8 0 0 0 4.6 19c.9 0 1.7-.4 2.2-1.1L8.5 16h7l1.7 1.9c.5.7 1.3 1.1 2.2 1.1a2.8 2.8 0 0 0 2.8-3.2l-.9-7.2A4 4 0 0 0 17.3 5z"/></svg></i><i class="fx-notes"><b>♪</b><b>♫</b><b>♪</b></i><i class="fx-joy"><b>✦</b><b>✦</b><b>✦</b><b>✦</b></i><i class="fx-vein"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M3 9.5c3.5 0 6.5-3 6.5-6.5M14.5 3c0 3.5 3 6.5 6.5 6.5M21 14.5c-3.5 0-6.5 3-6.5 6.5M9.5 21c0-3.5-3-6.5-6.5-6.5"/></svg></i><i class="fx2 f-done"><svg viewBox="0 0 16 16"><path d="M3.2 8.6l3.1 3.1 6.5-7.2" pathLength="1"/></svg><b></b><b></b><b></b><b></b><b></b><b></b></i><i class="fx2 f-call"><svg viewBox="0 0 16 16"><circle cx="3" cy="13" r="1.7"/><path d="M3 8.6a4.4 4.4 0 0 1 4.4 4.4"/><path d="M3 4.6a8.4 8.4 0 0 1 8.4 8.4"/><path d="M3 .7a12.3 12.3 0 0 1 12.3 12.3"/></svg></i><i class="fx2 f-game"><b></b><b></b><b></b><b></b></i><i class="fx2 f-bang"><svg viewBox="0 0 16 16"><path d="M8 2.6v6.6"/><circle cx="8" cy="12.9" r="1.35"/><path class="ray" d="M2.6 3.6l1.7 1.5M13.4 3.6l-1.7 1.5M1.4 8.6h2.1M14.6 8.6h-2.1"/></svg></i><i class="fx2 f-idea"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.3"/><g class="ray"><path d="M8 1.2v2.1M8 12.7v2.1M1.2 8h2.1M12.7 8h2.1M3.2 3.2l1.5 1.5M11.3 11.3l1.5 1.5M3.2 12.8l1.5-1.5M11.3 4.7l1.5-1.5"/></g></svg></i><i class="fx2 f-q"><svg viewBox="0 0 16 16"><path d="M5 5.4a3 3 0 1 1 4.1 2.8c-.8.35-1.1.9-1.1 1.7v.6" pathLength="1"/><circle cx="8" cy="13.1" r="1.15"/></svg><svg class="q2" viewBox="0 0 16 16"><path d="M5 5.4a3 3 0 1 1 4.1 2.8c-.8.35-1.1.9-1.1 1.7v.6" pathLength="1"/><circle cx="8" cy="13.1" r="1.15"/></svg></i><i class="fx2 f-spark"><svg viewBox="0 0 16 16"><path d="M8 1.5c.4 3.4 1.1 4.1 4.5 4.5-3.4.4-4.1 1.1-4.5 4.5-.4-3.4-1.1-4.1-4.5-4.5 3.4-.4 4.1-1.1 4.5-4.5z"/></svg><svg viewBox="0 0 16 16"><path d="M8 1.5c.4 3.4 1.1 4.1 4.5 4.5-3.4.4-4.1 1.1-4.5 4.5-.4-3.4-1.1-4.1-4.5-4.5 3.4-.4 4.1-1.1 4.5-4.5z"/></svg><svg viewBox="0 0 16 16"><path d="M8 1.5c.4 3.4 1.1 4.1 4.5 4.5-3.4.4-4.1 1.1-4.5 4.5-.4-3.4-1.1-4.1-4.5-4.5 3.4-.4 4.1-1.1 4.5-4.5z"/></svg></i><i class="fx2 f-eq"><b></b><b></b><b></b><b></b></i><i class="fx2 f-pop"><b>🍿</b></i><i class="fx2 f-vein"><svg viewBox="0 0 24 24"><path d="M3 9.5c3.5 0 6.5-3 6.5-6.5M14.5 3c0 3.5 3 6.5 6.5 6.5M21 14.5c-3.5 0-6.5 3-6.5 6.5M9.5 21c0-3.5-3-6.5-6.5-6.5"/></svg></i></div>`;
 
 export function icon(name, size = 18, cls = '') {
   const d = P[name] || P.spark;

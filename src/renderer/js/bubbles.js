@@ -47,6 +47,9 @@ export function setBubbles(items, isHidden) {
         onClick(d.item);
       });
       el.addEventListener('click', (e) => e.stopPropagation());
+      // a card with the details under the drop while the cursor is on it (e.g. every task of an agent)
+      el.addEventListener('pointerenter', () => { if (d.item?.detail) showTip(d); });
+      el.addEventListener('pointerleave', hideTip);
       layer.append(el);
       // born from the neighbour on the left (or from the island's edge)
       const prev = idx > 0 ? drops.get(keys[idx - 1]) : null;
@@ -58,8 +61,8 @@ export function setBubbles(items, isHidden) {
     if (d.sig !== it.sig) {
       d.sig = it.sig;
       d.el.innerHTML = it.html;
-      d.el.title = it.title || '';
     }
+    if (d.el.title !== (it.title || '')) d.el.title = it.title || ''; // live text (a game's play time) even when the look stays
     d.el.className = 'bubble' + (it.cls ? ' ' + it.cls : '');
   });
   for (const [k, d] of drops) if (!keys.includes(k) && !d.dying) { d.dying = true; d.diedAt = performance.now(); }
@@ -68,6 +71,23 @@ export function setBubbles(items, isHidden) {
 }
 
 export function setBubbleClick(fn) { onClick = fn; }
+
+let tip = null, tipFor = null;
+function showTip(d) {
+  if (!tip) { tip = document.createElement('div'); tip.className = 'bubtip'; layer.append(tip); }
+  tipFor = d;
+  tip.innerHTML = d.item.detail;
+  const s = size();
+  // it opens toward the room there is: to the right of the drop, or to its left near the edge
+  const w = tip.offsetWidth, room = layer.clientWidth || innerWidth;
+  let left = d.x - 20;
+  if (left + w > room - 8) left = d.x + 20 - w;
+  tip.style.left = Math.round(Math.max(8, left)) + 'px';
+  tip.style.top = Math.round(d.y + s / 2 + 10) + 'px';
+  tip.style.transformOrigin = left < d.x - 20 ? `${w - 20}px 0` : '20px 0';
+  tip.classList.add('on');
+}
+function hideTip() { tipFor = null; tip?.classList.remove('on'); }
 
 // (drops stay calm: no beat hops)
 
@@ -138,13 +158,20 @@ function frame(now) {
     const ang = Math.atan2(d.vy, d.vx) * 180 / Math.PI;
     const stretch = 1 + speed * 0.35, squash = 1 / Math.sqrt(stretch);
     const sc = Math.max(0.05, d.s);
-    d.el.style.transform = `translate(${(d.x - s / 2).toFixed(2)}px, ${(d.y - s / 2).toFixed(2)}px) rotate(${ang.toFixed(1)}deg) scale(${(sc * stretch).toFixed(3)}, ${(sc * squash).toFixed(3)}) rotate(${(-ang).toFixed(1)}deg)`;
-    d.el.style.width = d.el.style.height = s + 'px';
-    d.el.style.opacity = Math.min(1, Math.max(0, (d.s - 0.12) * 2.2)).toFixed(3);
-    d.el.style.pointerEvents = d.dying || hidden ? 'none' : '';
+    const tf = `translate(${(d.x - s / 2).toFixed(2)}px, ${(d.y - s / 2).toFixed(2)}px) rotate(${ang.toFixed(1)}deg) scale(${(sc * stretch).toFixed(3)}, ${(sc * squash).toFixed(3)}) rotate(${(-ang).toFixed(1)}deg)`;
+    const op = Math.min(1, Math.max(0, (d.s - 0.12) * 2.2)).toFixed(3);
+    // write only what changed: the same values every frame still cost a style pass
+    if (d._tf !== tf) { d._tf = tf; d.el.style.transform = tf; }
+    if (d._sz !== s) { d._sz = s; d.el.style.width = d.el.style.height = s + 'px'; }
+    if (d._op !== op) { d._op = op; d.el.style.opacity = op; }
+    const pe = d.dying || hidden ? 'none' : '';
+    if (d._pe !== pe) { d._pe = pe; d.el.style.pointerEvents = pe; }
     const moving = Math.abs(d.vx) > 0.02 || Math.abs(d.vy) > 0.02 || Math.abs(d.vs) > 0.002 || Math.abs(tx - d.x) > 0.3;
     if (moving) busy = true;
     if (d.dying && d.s < 0.16 && now - d.diedAt > 450) { d.el.remove(); drops.delete(d.key); }
   }
-  if (busy || drops.size) raf = requestAnimationFrame(frame);
+  // moving: every frame; standing still: a look 8 times a second (the island's edge may have moved them)
+  if (busy) raf = requestAnimationFrame(frame);
+  else if (drops.size) { clearTimeout(idleT); idleT = setTimeout(kick, 125); }
 }
+let idleT = 0;

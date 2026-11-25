@@ -59,13 +59,23 @@ function frame() {
     st.over += st.overV;
     st.over = Math.max(-30, Math.min(30, st.over));
     // cards: further down the list lags more, so the stack ripples
-    const items = page.querySelectorAll(ITEMS);
-    const top = page.getBoundingClientRect().top;
+    // read every position first, then write: reading after a write made the browser lay the whole page out
+    // again for each card (the clipboard tab has hundreds) - and only the cards on screen take part
+    const pr = page.getBoundingClientRect();
+    const top = pr.top, H = page.clientHeight || 1;
+    const items = [];
+    let below = 0;
+    for (const el of page.querySelectorAll(ITEMS)) {
+      if (below > 2) { if (el._j && (el._j.y || el._j.vy)) { el._j.y = el._j.vy = 0; items.push([el, null]); } continue; } // far below the screen: no need to measure
+      const r = el.getBoundingClientRect();
+      if (r.bottom < pr.top - 40 || r.top > pr.bottom + 40) { if (r.top > pr.bottom + 40) below++; if (el._j && (el._j.y || el._j.vy)) { el._j.y = el._j.vy = 0; items.push([el, null]); } continue; }
+      items.push([el, r]);
+    }
     let i = 0;
-    for (const el of items) {
+    for (const [el, rect] of items) {
       const j = el._j || (el._j = { y: 0, vy: 0, r: 0 });
-      const rect = el.getBoundingClientRect();
-      const depth = Math.min(1, Math.max(0, (rect.top - top) / (page.clientHeight || 1)));
+      if (!rect) { el.style.translate = ''; continue; }
+      const depth = Math.min(1, Math.max(0, (rect.top - top) / H));
       // gentle trail: lower cards follow a little later, then settle without bouncing around
       const lag = -st.vel * (0.35 + depth * 0.55) + st.over * (0.3 + depth * 0.4);
       j.vy += (Math.max(-10, Math.min(10, lag)) - j.y) * 0.22;

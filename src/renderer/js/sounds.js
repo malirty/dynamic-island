@@ -13,11 +13,21 @@ export const SOUND_EVENTS = [
   ['error', 'Ошибка', 'soft'],
   ['open', 'Открытие острова', 'none'],
   ['clip', 'Что-то скопировано', 'none'],
+  ['message', 'Новое сообщение (Telegram, Discord, WhatsApp…)', 'twinkle'],
+  ['download', 'Загрузка завершена', 'coin'],
+  ['callEnd', 'Звонок закончился', 'down'],
+  ['game', 'Запущена игра', 'levelup'],
+  ['timerSet', 'Таймер или напоминание поставлено', 'blip'],
+  ['unlock', 'Подписка активна', 'sparkle'],
+  ['close', 'Закрытие острова', 'none'],
+  ['hide', 'Остров убран', 'whoosh'],
 ];
 export const SOUNDS = [
   ['none', 'Без звука'], ['pop', 'Пузырёк'], ['chime', 'Колокольчики'], ['bell', 'Колокол'], ['ding', 'Дзынь'],
   ['marimba', 'Маримба'], ['glass', 'Стекло'], ['bubble', 'Бульк'], ['shutter', 'Затвор'], ['soft', 'Мягкий вниз'],
-  ['alarm', 'Будильник'], ['custom', 'Свой файл…'],
+  ['alarm', 'Будильник'], ['twinkle', 'Искорки'], ['coin', 'Монетка'], ['levelup', 'Новый уровень'], ['blip', 'Блип'],
+  ['sparkle', 'Сияние'], ['pluck', 'Щипок'], ['harp', 'Арфа'], ['knock', 'Тук-тук'], ['whoosh', 'Вжух'], ['down', 'Вниз'],
+  ['custom', 'Свой файл…'],
 ];
 
 let ctx = null, out = null;
@@ -57,6 +67,16 @@ const SYNTH = {
   bubble: (t) => tone(t, 380, 0.18, { to: 950, gain: 0.32 }),
   shutter: (t) => { noise(t, 0.05, 3200, 0.5); noise(t + 0.07, 0.06, 1800, 0.4); },
   soft: (t) => { tone(t, 523.3, 0.25, { type: 'triangle', gain: 0.22 }); tone(t + 0.15, 392, 0.4, { type: 'triangle', gain: 0.22 }); },
+  twinkle: (t) => { tone(t, 1567.98, 0.22, { gain: 0.18 }); tone(t + 0.07, 2093, 0.3, { gain: 0.15 }); tone(t + 0.14, 2637, 0.4, { gain: 0.1 }); },
+  coin: (t) => { tone(t, 987.8, 0.09, { type: 'square', gain: 0.08 }); tone(t + 0.08, 1318.5, 0.4, { type: 'square', gain: 0.08 }); },
+  levelup: (t) => [523.3, 659.3, 784, 1046.5].forEach((f, i) => tone(t + i * 0.07, f, i === 3 ? 0.5 : 0.14, { type: 'triangle', gain: 0.2 })),
+  blip: (t) => tone(t, 1200, 0.08, { to: 1600, gain: 0.2 }),
+  sparkle: (t) => [2093, 2637, 3136, 2637, 3520].forEach((f, i) => tone(t + i * 0.05, f, 0.35, { gain: 0.07 })),
+  pluck: (t) => { tone(t, 440, 0.35, { type: 'triangle', gain: 0.3, attack: 0.002 }); tone(t, 880, 0.15, { gain: 0.08, attack: 0.002 }); },
+  harp: (t) => [392, 493.9, 587.3, 784, 987.8].forEach((f, i) => tone(t + i * 0.06, f, 0.7, { type: 'triangle', gain: 0.14 })),
+  knock: (t) => { tone(t, 180, 0.08, { gain: 0.5, to: 120 }); tone(t + 0.16, 180, 0.08, { gain: 0.5, to: 120 }); },
+  whoosh: (t) => { noise(t, 0.3, 900, 0.35); tone(t, 500, 0.3, { to: 180, gain: 0.05 }); },
+  down: (t) => { tone(t, 659.3, 0.18, { type: 'triangle', gain: 0.2 }); tone(t + 0.12, 523.3, 0.18, { type: 'triangle', gain: 0.2 }); tone(t + 0.24, 392, 0.35, { type: 'triangle', gain: 0.2 }); },
   alarm: (t) => { for (let k = 0; k < 3; k++) for (let i = 0; i < 4; i++) tone(t + k * 0.9 + i * 0.13, 1760, 0.09, { gain: 0.18 }); },
 };
 

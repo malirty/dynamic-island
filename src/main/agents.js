@@ -62,7 +62,7 @@ module.exports = function createAgents({ settings, dataDir, emit }) {
   async function onClaude(ev) {
     const id = ev.session_id || 'claude';
     const project = ev.cwd ? path.basename(ev.cwd) : 'Claude Code';
-    const base = { source: 'claude', project, cwd: ev.cwd };
+    const base = { source: 'claude', project, cwd: ev.cwd, ...(ev.transcript_path ? { transcript: ev.transcript_path } : {}) };
     switch (ev.hook_event_name) {
       case 'SessionStart': touch(id, { ...base, state: 'idle', note: 'Сессия открыта' }); break;
       case 'UserPromptSubmit': touch(id, { ...base, state: 'working', note: (ev.prompt || '').slice(0, 120), tool: null }); emit('agent-working', { project }); break;
@@ -105,6 +105,22 @@ module.exports = function createAgents({ settings, dataDir, emit }) {
     publish();
     return {};
   }
+
+  // A turn that was interrupted (stopped, or a new message sent mid-way) sends no "Stop", so the island kept
+  // showing "Claude трудится" for nothing. While Claude really works its transcript keeps growing; when
+  // neither a hook event nor the transcript has moved for a while, the session is idle again.
+  setInterval(() => {
+    const now = Date.now();
+    let changed = false;
+    for (const s of sessions.values()) {
+      if (s.source !== 'claude' || s.state !== 'working' || now - s.updated < 45e3) continue;
+      if ([...asks.values()].some((a) => a.session === s.id)) continue; // waiting on a question / permission
+      let last = s.updated;
+      try { if (s.transcript) last = Math.max(last, fs.statSync(s.transcript).mtimeMs); } catch {}
+      if (now - last > 60e3) { s.state = 'idle'; s.tool = null; s.note = 'Остановлен'; changed = true; }
+    }
+    if (changed) publish();
+  }, 10e3);
 
   function onCodex(ev) {
     const id = 'codex:' + (ev['thread-id'] || ev.cwd || 'codex');

@@ -58,6 +58,12 @@ const WEB = {
 };
 const WEB_DEFAULT = { mute: { uia: MUTE_NAMES }, hangup: { uia: HANGUP_NAMES } };
 
+// A pressed "Mute" switch means the mic is off; a pressed "Unmute" / "Turn on microphone" switch means it is on
+function isMutedSwitch(name, state) {
+  const on = state === 'On';
+  return /^un|unmute|^включить|turn on/.test(name) ? !on : on;
+}
+
 module.exports = function createCalls({ emit, notify }) {
   const active = new Map(); // id -> { id, name, since, micMuted, soundMuted }
   let busy = false;
@@ -163,6 +169,26 @@ module.exports = function createCalls({ emit, notify }) {
       }
     } finally { zoomBusy = false; }
   }, 2500);
+  // Apps with a mic switch (Discord): read its real state every few seconds, so a mute made in the app
+  // itself shows on the island too. A call whose app has no readable switch is left alone after a few tries.
+  let switchBusy = false;
+  setInterval(async () => {
+    if (switchBusy) return;
+    switchBusy = true;
+    try {
+      for (const c of active.values()) {
+        if (c.id === 'zoom' || (c.switchMiss || 0) >= 3) continue;
+        const plan = (c.id.startsWith('web:') ? WEB[c.site] || WEB_DEFAULT : CONTROL[c.id])?.mute;
+        const t = target(c.id);
+        if (!plan?.uia || !t) continue;
+        const r = await helper.slow('uiaToggle', { proc: t.proc, hwnd: c.id.startsWith('web:') ? c.hwnd || 0 : 0, names: plan.uia }, 8000).catch(() => null);
+        if (!r?.found || (r.state !== 'On' && r.state !== 'Off')) { c.switchMiss = (c.switchMiss || 0) + 1; continue; }
+        c.switchMiss = 0;
+        const m = isMutedSwitch((r.name || '').toLowerCase(), r.state);
+        if (c.micMuted !== m) { c.micMuted = m; c.inApp = true; publish(); }
+      }
+    } finally { switchBusy = false; }
+  }, 2500);
   // run "mute" / "hangup" for a call: its button first, then its shortcut
   async function act(c, what) {
     const t = target(c.id);
@@ -172,7 +198,7 @@ module.exports = function createCalls({ emit, notify }) {
     if (!hwnd && c.id === 'zoom') hwnd = await zoomWindow(); // the meeting window, not Zoom's home window
     if (plan.uia) {
       const r = await helper.slow('uiaPress', { proc: t.proc, hwnd: c.id.startsWith('web:') ? hwnd : 0, names: plan.uia }, 15000).catch(() => null);
-      if (r?.ok) return { ok: true, how: 'button', name: r.name };
+      if (r?.ok) return { ok: true, how: 'button', name: r.name, toggle: r.toggle };
     }
     if (plan.keys) {
       const r = await helper.fast('sendKeys', { proc: t.proc, hwnd, vks: plan.keys, stay: !!plan.stay }, 5000).catch(() => null);
@@ -200,7 +226,8 @@ module.exports = function createCalls({ emit, notify }) {
       if (r.ok) {
         // a pressed button says which way it went ("Mute" -> now muted, "Unmute" -> now on); a shortcut can't
         const n = (r.name || '').toLowerCase();
-        if (/^un|unmute|^включить|turn on/.test(n)) c.micMuted = false;
+        if (r.toggle === 'On' || r.toggle === 'Off') c.micMuted = isMutedSwitch(n, r.toggle); // a switch (Discord): its real state
+        else if (/^un|unmute|^включить|turn on/.test(n)) c.micMuted = false;
         else if (/mute|выключить|выкл|откл|turn off/.test(n)) c.micMuted = true;
         else c.micMuted = !c.micMuted;
         c.inApp = true; publish(); return c;

@@ -55,7 +55,7 @@ function build(q) {
   const cur = currency(t, rates);
   if (cur) out.push({ big: true, t: cur.text, s: cur.sub + ' · Enter — скопировать', i: 'palette', copy: cur.copy });
   const tm = parseTimer(t);
-  if (tm) out.push({ t: `Таймер на ${fmtDur(tm.seconds)}`, s: tm.text || 'Enter — запустить', i: 'timer', run: () => addTimer(tm) });
+  if (tm) out.push({ t: `Таймер на ${fmtDur(tm.seconds)}`, s: tm.text ? `«${tm.text}»` : 'Enter — дальше напишешь, зачем', i: 'timer', stay: !tm.text, run: () => (tm.text ? addTimer(tm) : askWhy(tm)) });
   const rem = parseReminder(t);
   if (rem) out.push({ t: `Напомнить ${whenText(rem.at)}`, s: rem.text, i: 'bell', run: () => addReminder(rem) });
   const lower = t.toLowerCase();
@@ -81,6 +81,23 @@ function fmtDur(s) {
   const hh = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
   return [hh && hh + ' ч', m && m + ' мин', sec && sec + ' сек'].filter(Boolean).join(' ');
 }
+// the second step of a timer: what is it for? (tea, laundry, a call...)
+let pendingTimer = null;
+function askWhy(tm) {
+  pendingTimer = tm;
+  input.value = '';
+  lastQ = '';
+  input.placeholder = `Таймер на ${fmtDur(tm.seconds)} — зачем? Например: чай. Enter — запустить`;
+  results = whyResults('');
+  sel = 0;
+  render();
+  input.focus();
+}
+function whyResults(q) {
+  const tm = pendingTimer;
+  return [{ t: q ? `Таймер на ${fmtDur(tm.seconds)}: ${q}` : `Таймер на ${fmtDur(tm.seconds)}`, s: q ? 'Enter — запустить' : 'Напиши, зачем таймер, или нажми Enter', i: 'timer', run: () => { pendingTimer = null; addTimer({ ...tm, text: q }); } }];
+}
+function resetWhy() { pendingTimer = null; if (input) input.placeholder = 'Программа, файл, 15% от 2000, таймер 10 мин, вопрос…'; }
 async function addTimer(tm) {
   await api.invoke('reminders:add', { kind: 'timer', at: Date.now() + tm.seconds * 1000, text: tm.text || `Таймер ${fmtDur(tm.seconds)}`, duration: tm.seconds });
   hostApi.flash({ icon: '⏱', title: `Таймер на ${fmtDur(tm.seconds)} запущен`, ms: 1800 });
@@ -125,6 +142,7 @@ async function exec(r) {
     return;
   }
   if (r.tab) { hostApi.openTab(r.tab); return; }
+  if (r.stay) { r.run?.(); return; } // a next step in the same field
   hostApi.collapse(true);
   r.run?.();
 }
@@ -186,6 +204,7 @@ export function initPalette(host) {
     answer = null;
     sel = 0;
     fileHits = [];
+    if (pendingTimer) { results = whyResults(input.value.trim()); render(); return; }
     results = build(q);
     render();
     searchFiles(q);
@@ -200,6 +219,7 @@ export function initPalette(host) {
 }
 
 export async function openPalette(prefill = '') {
+  resetWhy();
   input.value = prefill;
   lastQ = null;
   answer = null;
@@ -212,4 +232,4 @@ export async function openPalette(prefill = '') {
   if (!rates) api.invoke('currency').then((r) => (rates = r)).catch(() => {});
   if (!apps.length) api.invoke('palette:apps').then((a) => (apps = a || []));
 }
-export function closePalette() { if (aiReq) api.invoke('ai:abort', aiReq); aiReq = null; }
+export function closePalette() { if (aiReq) api.invoke('ai:abort', aiReq); aiReq = null; resetWhy(); }

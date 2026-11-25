@@ -14,12 +14,15 @@ const helper = require('./helper');
 const storeMod = require('./store');
 const createClipboard = require('./clipboard');
 const createDownloads = require('./downloads');
+const createPhone = require('./phone');
 const createWeather = require('./weather');
 const createMedia = require('./media');
 const createAI = require('./ai');
 const createAgents = require('./agents');
 const createTelegram = require('./telegram');
 const createCalls = require('./calls');
+const createGames = require('./games');
+const createAccount = require('./account');
 const sys = require('./system');
 
 const RENDERER = path.join(__dirname, '..', 'renderer');
@@ -32,6 +35,7 @@ let lastExternal = null; // last foreground window that isn't ours: paste target
 let fgFullscreen = false;
 let caffeineId = null;
 let hitRects = [];
+let mouseHold = false;
 let ignoring = null; // click-through state of the island window
 
 const send = (ch, payload) => { if (island && !island.isDestroyed()) island.webContents.send(ch, payload); };
@@ -57,7 +61,7 @@ async function appLogo(hint) {
   return url;
 }
 function notify(n) {
-  if (n.logoHint && !n.thumb && !n.logo) {
+  if (n.logoHint && !n.logo) { // the app's badge even when the sender's picture is there (avatar + Discord badge)
     const hint = n.logoHint; delete n.logoHint;
     appLogo(hint).then((l) => notify(l ? { ...n, logo: l } : n), () => notify(n));
     return;
@@ -75,27 +79,41 @@ function remindersTick() {
   const now = Date.now();
   let changed = false;
   for (const r of S.reminders.data.items) {
-    if (r.done || r.at > now) continue;
+    const fireAt = r.at - (r.cal ? (r.before || 0) * 60e3 : 0); // a calendar event can warn a little ahead
+    if (r.done || fireAt > now) continue;
     r.done = true; changed = true;
-    notify({ kind: 'reminder', title: r.kind === 'timer' ? 'Таймер' : 'Напоминание', body: r.text || 'Время вышло', icon: r.kind === 'timer' ? '⏱' : '🔔', sticky: true });
+    const title = r.cal ? (r.before ? `Через ${r.before >= 60 ? r.before / 60 + ' ч' : r.before + ' мин'} · ${new Date(r.at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}` : 'Событие') : r.kind === 'timer' ? 'Таймер' : 'Напоминание';
+    notify({ kind: 'reminder', title, body: r.text || 'Время вышло', icon: r.kind === 'timer' ? '⏱' : '🔔', sticky: true });
     if (Notification.isSupported() && !island?.isVisible()) new Notification({ title: 'Island', body: r.text || 'Таймер' }).show();
   }
   // keep finished items for a day for history
   const before = S.reminders.data.items.length;
-  S.reminders.data.items = S.reminders.data.items.filter((r) => !r.done || now - r.at < 86400e3);
+  S.reminders.data.items = S.reminders.data.items.filter((r) => !r.done || now - r.at < (r.cal ? 60 : 1) * 86400e3); // calendar events stay visible in the past two months
   if (changed || before !== S.reminders.data.items.length) { S.reminders.save(); send('reminders', S.reminders.data.items); }
 }
 
 // ---------------- island window ----------------
+// The island's window is as wide as the screen: when it grows (opening, stretching, a big photo) only its
+// height changes, so the window never moves sideways under the island - moving it while the island
+// animated made the island skip for a frame. Clicks still go through everywhere outside the island.
+function winW() { return screen.getPrimaryDisplay().bounds.width; }
+// ...and as tall as it can ever need, once and for all: a window that grew and shrank with the island
+// flashed empty for a frame each time (the island vanished and came back at the end of closing). It
+// stops above the taskbar, so Windows never takes it for a full-screen app.
+function winH() {
+  const d = screen.getPrimaryDisplay();
+  return Math.max(WIN_H, Math.min(d.workArea.y + d.workArea.height - d.bounds.y, Math.round(d.bounds.height * 0.95)));
+}
 function primaryTop() {
   const d = screen.getPrimaryDisplay();
-  return { x: Math.round(d.bounds.x + (d.bounds.width - WIN_W) / 2), y: d.bounds.y };
+  return { x: d.bounds.x, y: d.bounds.y };
 }
 
 function createIsland() {
   const { x, y } = primaryTop();
   island = new BrowserWindow({
-    x, y, width: WIN_W, height: WIN_H,
+    icon: APP_ICON,
+    x, y, width: winW(), height: winH(),
     frame: false, transparent: true, resizable: false, movable: false, minimizable: false, maximizable: false,
     fullscreenable: false, skipTaskbar: true, hasShadow: false, show: false, alwaysOnTop: true,
     backgroundColor: '#00000000', title: 'Island',
@@ -104,10 +122,10 @@ function createIsland() {
   island.setAlwaysOnTop(true, 'screen-saver');
   island.setVisibleOnAllWorkspaces(true);
   island.setIgnoreMouseEvents(true, { forward: true });
-  hitRects = [{ x: Math.round(WIN_W / 2 - 170), y: 0, width: 340, height: 50 }];
+  hitRects = [{ x: Math.round(winW() / 2 - 170), y: 0, width: 340, height: 50 }];
   island.loadFile(path.join(RENDERER, 'island.html'));
   island.once('ready-to-show', () => island.showInactive());
-  island.on('blur', () => { send('blur'); if (process.env.ISLAND_TRACE) setTimeout(() => helper.fast('fg', {}, 3000).then((fg) => fs.appendFile(path.join(app.getPath('userData'), 'island.log'), `${new Date().toISOString()} BLUR -> ${JSON.stringify(fg)}
+  island.on('blur', () => { if (captureWin) return; /* put away for a screenshot: stays as it was */ send('blur'); if (process.env.ISLAND_TRACE) setTimeout(() => helper.fast('fg', {}, 3000).then((fg) => fs.appendFile(path.join(app.getPath('userData'), 'island.log'), `${new Date().toISOString()} BLUR -> ${JSON.stringify(fg)}
 `, () => {})).catch(() => {}), 120); });
   // renderer warnings/errors go to %APPDATA%/Island/island.log
   const logFile = path.join(app.getPath('userData'), 'island.log');
@@ -116,7 +134,7 @@ function createIsland() {
   });
   island.webContents.on('render-process-gone', (_e, d) => fs.appendFile(logFile, `${new Date().toISOString()} renderer gone: ${d.reason}\n`, () => {}));
   if (process.argv.includes('--dev')) island.webContents.openDevTools({ mode: 'detach' });
-  screen.on('display-metrics-changed', () => { const p = primaryTop(); island.setBounds({ ...p, width: WIN_W, height: WIN_H }); });
+  screen.on('display-metrics-changed', () => { const p = primaryTop(); island.setBounds({ ...p, width: winW(), height: winH() }); send('win-size', { w: winW(), h: winH() }); });
 }
 
 let settingsWin = null;
@@ -127,6 +145,7 @@ function openSettingsWindow(section) {
     return;
   }
   settingsWin = new BrowserWindow({
+    icon: APP_ICON,
     width: 1040, height: 720, minWidth: 820, minHeight: 520, frame: false, transparent: true, backgroundColor: '#00000000',
     title: 'Island · Настройки', show: false, webPreferences: { preload: path.join(__dirname, 'preload.js'), spellcheck: false },
   });
@@ -141,6 +160,7 @@ function openSettingsWindow(section) {
 function openAiWindow() {
   if (aiWin && !aiWin.isDestroyed()) { aiWin.show(); aiWin.focus(); return; }
   aiWin = new BrowserWindow({
+    icon: APP_ICON,
     width: 760, height: 820, minWidth: 420, minHeight: 500, frame: false, transparent: true, backgroundColor: '#00000000',
     title: 'Island · ИИ', webPreferences: { preload: path.join(__dirname, 'preload.js'), spellcheck: false, webviewTag: true },
   });
@@ -159,10 +179,10 @@ async function startCapture(mode) {
   const size = { width: Math.round(display.bounds.width * sf), height: Math.round(display.bounds.height * sf) };
   const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: size });
   const src = sources.find((s) => String(s.display_id) === String(display.id)) || sources[0];
-  send('capture-hide', false);
-  if (!src) return;
+  if (!src) { send('capture-hide', false); return; }
   pendingCapture = { mode, dataUrl: src.thumbnail.toDataURL(), sf, display: display.bounds };
   captureWin = new BrowserWindow({
+    icon: APP_ICON,
     ...display.bounds, frame: false, transparent: false, backgroundColor: '#000000', alwaysOnTop: true, skipTaskbar: true,
     resizable: false, movable: false, fullscreenable: false, hasShadow: false, show: false,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), spellcheck: false },
@@ -170,8 +190,15 @@ async function startCapture(mode) {
   captureWin.setAlwaysOnTop(true, 'screen-saver');
   captureWin.setBounds(display.bounds);
   captureWin.loadFile(path.join(RENDERER, 'capture.html'));
-  captureWin.once('ready-to-show', () => { captureWin.show(); captureWin.focus(); });
-  captureWin.on('closed', () => { captureWin = null; });
+  // the island stays away while you pick the area (it covered the screenshot, and Esc went to it
+  // instead of cancelling); it comes back just as it was when the capture is done or cancelled
+  const islandWasShown = island && !island.isDestroyed() && island.isVisible();
+  captureWin.once('ready-to-show', () => { captureWin.show(); captureWin.focus(); if (islandWasShown) island.hide(); });
+  captureWin.on('closed', () => {
+    captureWin = null;
+    if (islandWasShown && !island.isDestroyed()) island.showInactive();
+    setTimeout(() => send('capture-hide', false), 60);
+  });
 }
 
 async function ocrImage(image, lang) {
@@ -247,8 +274,12 @@ function registerHotkeys() {
 
 function applySettings() {
   const s = S.settings.data;
-  app.setLoginItemSettings({ openAtLogin: !!s.island.autostart, args: [] });
+  // Run from the sources (not an installed build), Windows must start electron.exe *with the app folder*,
+  // otherwise it opens Electron's empty default window instead of the island.
+  const login = app.isPackaged ? { args: ['--autostart'] } : { path: process.execPath, args: [app.getAppPath(), '--autostart'] };
+  app.setLoginItemSettings({ openAtLogin: !!s.island.autostart, ...login });
   services.downloads.restart();
+  if (services.phone) (s.phone?.enabled !== false ? services.phone.start() : services.phone.stop());
 }
 
 // Hide the island for a while (minutes) or until called back (0).
@@ -263,23 +294,19 @@ function showIsland() {
   if (island && !island.isVisible()) { island.showInactive(); setTimeout(() => send('island-shown'), 60); } // it slides back in
 }
 
+// The island's icon (assets/): the glowing pill for the tray (tray@2x.png is picked up on 200% screens),
+// the full tile for windows and the taskbar.
+const ASSETS = path.join(__dirname, '..', '..', 'assets');
+const APP_ICON = path.join(ASSETS, 'icon.ico');
 function trayIcon() {
-  // 16x16 BGRA pill drawn in code, so the app ships without binary assets.
-  const w = 16, h = 16, buf = Buffer.alloc(w * h * 4);
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    const dx = Math.max(0, Math.abs(x - 7.5) - 3.5), dy = Math.abs(y - 7.5);
-    const d = Math.sqrt(dx * dx + dy * dy);
-    const a = Math.max(0, Math.min(1, 4.6 - d));
-    const i = (y * w + x) * 4;
-    buf[i] = 255; buf[i + 1] = 140 + x * 6; buf[i + 2] = 124; buf[i + 3] = Math.round(a * 255);
-  }
-  return nativeImage.createFromBitmap(buf, { width: w, height: h });
+  const img = nativeImage.createFromPath(path.join(ASSETS, 'tray.png'));
+  return img.isEmpty() ? nativeImage.createFromPath(APP_ICON) : img;
 }
 
 // ---------------- polling ----------------
 function startPolling() {
   // Foreground window: paste target, clip source, clipboard changes, fullscreen.
-  let busy = false;
+  let busy = false, lastKeys = null;
   setInterval(async () => {
     if (busy) return;
     busy = true;
@@ -288,6 +315,14 @@ function startPolling() {
       const ours = fg.pid === process.pid || BrowserWindow.getAllWindows().some((w) => String(w.getNativeWindowHandle().readBigUInt64LE()) === fg.hwnd);
       if (!ours && fg.hwnd !== '0') { if (lastExternal && lastExternal.hwnd !== fg.hwnd) send('fg-change', fg.process || ''); lastExternal = fg; }
       services.clips.onSeq(fg.clipSeq, ours ? lastExternal : fg);
+      services.games?.onForeground(fg, ours);
+      // Caps Lock / Num Lock: the island shows a short note when they change (not at start)
+      const keys = `${fg.caps ? 1 : 0}${fg.num ? 1 : 0}`;
+      if (lastKeys !== null && keys !== lastKeys && fg.caps !== undefined) {
+        if (keys[0] !== lastKeys[0] && S.settings.data.notifications?.capsLock !== false) send('lock-key', { key: 'caps', on: !!fg.caps });
+        else if (keys[1] !== lastKeys[1] && S.settings.data.notifications?.numLock) send('lock-key', { key: 'num', on: !!fg.num });
+      }
+      lastKeys = keys;
       const full = !ours && fg.fullscreen && S.settings.data.island.hideOnFullscreen;
       if (full !== fgFullscreen) { fgFullscreen = full; send('fullscreen', full); }
     } catch {} finally { busy = false; }
@@ -302,7 +337,7 @@ function startPolling() {
     const p = screen.getCursorScreenPoint();
     const b = island.getBounds();
     const x = p.x - b.x, y = p.y - b.y;
-    const inside = hitRects.some((r) => x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height);
+    const inside = mouseHold || hitRects.some((r) => x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height); // held: a drag that left the island goes on
     if (ignoring !== !inside) { ignoring = !inside; island.setIgnoreMouseEvents(ignoring, { forward: true }); }
     const k = p.x + ',' + p.y;
     if (k === last) return;
@@ -327,14 +362,16 @@ function ipc() {
   h('init', () => ({
     settings: S.settings.data, clips: S.clips.data.items, notes: S.notes.data.items, shelf: S.shelf.data.items,
     reminders: S.reminders.data.items, weather: services.weather.get(), media: services.media.get(), lyrics: services.media.lyrics(),
-    notifications: recent, agentsInstalled: services.agents.status(), telegram: services.telegram.status(),
+    notifications: recent, agentsInstalled: services.agents.status(), telegram: services.telegram.status(), account: services.account.status(),
     providers: services.ai.PROVIDERS, user: os.userInfo().username, hotkeys: registerHotkeys(),
-    winSize: { w: WIN_W, h: WIN_H },
+    winSize: { w: winW(), h: winH() },
   }));
 
   h('weather:refresh', () => services.weather.refresh());
   he('settings:set', (data, e) => {
     const cityChanged = data.weather?.city !== S.settings.data.weather?.city;
+    // the Telegram session belongs to the main process (it changes on sign-in); a window's older copy must never wipe it
+    data.telegram = { ...(data.telegram || {}), session: S.settings.data.telegram?.session || '' };
     S.settings.data = data; S.settings.save();
     if (cityChanged) { clearTimeout(ipc.weatherT); ipc.weatherT = setTimeout(() => services.weather.refresh(), 1500); }
     applySettings();
@@ -424,11 +461,48 @@ function ipc() {
   ipcMain.on('shelf:drag', (e, ids) => {
     const items = S.shelf.data.items.filter((x) => ids.includes(x.id) && fs.existsSync(x.path));
     if (!items.length) return;
-    const icon = items[0].icon ? nativeImage.createFromDataURL(items[0].icon) : trayIcon();
+    const icon = items[0].icon ? nativeImage.createFromDataURL(items[0].icon) : nativeImage.createFromPath(path.join(ASSETS, 'icon-64.png'));
     e.sender.startDrag({ files: items.map((x) => x.path), file: items[0].path, icon });
   });
   h('file:open', (p) => shell.openPath(p));
   h('file:reveal', (p) => shell.showItemInFolder(p));
+  // the phone over USB
+  h('phone:list', () => services.phone.list());
+  h('phone:recent', (name, n) => services.phone.recent(name, n));
+  // a photo shown big: the island's window grows (centred at the top) up to the screen; 0,0 = back to normal
+  // while the island is being stretched it keeps the mouse, even outside its outline (else the drag broke off)
+  h('island:hold', (on) => { mouseHold = !!on; if (mouseHold && ignoring) { ignoring = false; island.setIgnoreMouseEvents(false); } return true; });
+  h('island:grow', (w, hh) => {
+    const d = screen.getPrimaryDisplay();
+    const W = d.bounds.width, H = winH(); // the window keeps its size (see winH)
+    const b = island.getBounds();
+    if (b.width !== W || b.height !== H || b.x !== d.bounds.x || b.y !== d.bounds.y) island.setBounds({ x: d.bounds.x, y: d.bounds.y, width: W, height: H });
+    return { w: W, h: H };
+  });
+  // small previews made by Windows itself (fast, and they work for HEIC and videos too); a full-size
+  // picture only for what the island can't show by itself (HEIC)
+  const thumbCache = new Map();
+  h('phone:thumb', async (p, size = 220) => {
+    const key = p + '|' + size;
+    if (thumbCache.has(key)) return thumbCache.get(key);
+    let url = null;
+    try { const img = await nativeImage.createThumbnailFromPath(p, { width: size, height: size }); if (!img.isEmpty()) url = 'data:image/jpeg;base64,' + img.toJPEG(82).toString('base64'); } catch {}
+    if (thumbCache.size > 600) thumbCache.delete(thumbCache.keys().next().value);
+    thumbCache.set(key, url);
+    return url;
+  });
+  h('phone:import', (name) => { services.phone.importPhotos(name); return true; });
+  h('phone:open', (name) => services.phone.open(name));
+  h('phone:folder', (name) => shell.openPath(services.phone.folder(name)));
+  h('phone:send', async (name, files) => {
+    const viaTg = !name || /iphone|ipad|apple/i.test(name);
+    if (viaTg && services.telegram?.status?.() !== 'on' && !S.settings.data.telegram?.session) return 'notg';
+    if (!files?.length) { const r = await dialog.showOpenDialog({ title: viaTg ? 'Отправить на телефон через Telegram' : `Отправить на ${name}`, properties: ['openFile', 'multiSelections'] }); if (r.canceled) return false; files = r.filePaths; }
+    if (viaTg) services.phone.sendViaTelegram(files, (f) => services.telegram.tg.sendFile('me', { path: f, asFile: true }));
+    else services.phone.sendFiles(name, files);
+    return true;
+  });
+  h('downloads:folder', () => shell.openPath(S.settings.data.downloadsDir || app.getPath('downloads')));
   h('file:read', (p) => readForAI(p));
   h('file:icon', async (p) => { try { return (await app.getFileIcon(p, { size: 'normal' })).toDataURL(); } catch { return null; } });
   h('url:open', (u) => shell.openExternal(u));
@@ -530,8 +604,8 @@ function ipc() {
     }
     return [...out.values()];
   });
-  h('sys:appVolume', (name, level) => helper.fast('setAppVolume', { match: name, level }));
-  h('sys:appMute', (name, on) => helper.fast('setAppMute', { match: name, on }));
+  h('sys:appVolume', (name, level) => helper.latest('appvol:' + name, () => helper.audio('setAppVolume', { match: name, level })));
+  h('sys:appMute', (name, on) => helper.audio('setAppMute', { match: name, on }));
   h('sys:brightness', () => sys.brightness());
   h('sys:brightness:set', (v) => sys.setBrightness(v));
   h('sys:caffeine', (on) => {
@@ -553,6 +627,8 @@ function ipc() {
   h('agents:status', () => services.agents.status());
   h('agents:list', () => services.agents.list());
   h('calls:list', () => services.calls.list());
+  h('games:get', () => services.games.get());
+  h('games:focus', () => { const w = services.games.hwnd(); return w ? helper.fast('focus', { hwnd: w }) : null; });
   h('calls:mic', (id) => services.calls.muteInApp(id)); // the app's own mute button / shortcut, else Windows
   h('calls:hangup', (id) => services.calls.hangup(id));
   h('calls:sound', (id) => services.calls.toggleSound(id));
@@ -600,10 +676,32 @@ function ipc() {
 
   h('notifications:clear', () => { recent.length = 0; });
   h('island:hide', (minutes) => hideIsland(+minutes || 0));
+  // account & subscription
+  h('account:get', () => services.account.status());
+  h('account:refresh', () => services.account.refresh());
+  h('account:login', (email, pass) => services.account.login(email, pass));
+  h('account:register', (email, pass, name) => services.account.register(email, pass, name));
+  h('account:logout', () => services.account.logout());
+  h('account:activate', (key) => services.account.activate(key));
+  h('account:name', (name) => services.account.setName(name));
+  h('account:server', (url) => services.account.setServer(url));
+  // the admin panel in its own window, signed in with the island's admin account
+  let adminWin = null;
+  h('account:admin', async () => {
+    const t = await services.account.adminToken();
+    if (adminWin && !adminWin.isDestroyed()) { adminWin.focus(); adminWin.webContents.executeJavaScript(`window.__islandAdmin(${JSON.stringify(t)})`); return true; }
+    adminWin = new BrowserWindow({ icon: APP_ICON, width: 1180, height: 820, title: 'Island — админ-панель', backgroundColor: '#0b0b0f', autoHideMenuBar: true, webPreferences: { contextIsolation: true, sandbox: true } });
+    adminWin.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
+    adminWin.webContents.once('did-finish-load', () => adminWin.webContents.executeJavaScript(`window.__islandAdmin(${JSON.stringify(t)})`));
+    adminWin.loadURL(services.account.server() + '/admin');
+    return true;
+  });
+  h('account:buy', async () => { const r = await services.account.buyLink(); if (r?.url) shell.openExternal(r.url); return r; });
   h('app:quit', () => app.quit());
   h('app:relaunch', () => { app.relaunch(); app.quit(); });
   he('win:close', (e) => BrowserWindow.fromWebContents(e.sender)?.close());
   he('win:minimize', (e) => BrowserWindow.fromWebContents(e.sender)?.minimize());
+  he('win:maximize', (e) => { const w = BrowserWindow.fromWebContents(e.sender); if (w) w.isMaximized() ? w.unmaximize() : w.maximize(); });
 }
 
 // Dev aid: saves the island window as PNG and runs commands from debug-cmd.json
@@ -622,6 +720,15 @@ function debugShots() {
         if (c.input) for (const [type, x, y, ms] of c.input) {
           island.webContents.sendInputEvent({ type, x, y, button: 'left', clickCount: 1 });
           if (ms) await new Promise((r) => setTimeout(r, ms));
+        }
+        // { "profile": ms, "js": "..." }: a CPU profile of the island while the js runs (dev aid: where the time goes)
+        if (c.profile) {
+          const dbg = island.webContents.debugger;
+          try { if (!dbg.isAttached()) dbg.attach('1.3'); await dbg.sendCommand('Profiler.enable'); await dbg.sendCommand('Profiler.setSamplingInterval', { interval: 200 }); await dbg.sendCommand('Profiler.start'); } catch (e) { fs.writeFileSync(path.join(dir, 'debug-js.txt'), 'profiler: ' + e.message); }
+          if (c.js) island.webContents.executeJavaScript(c.js).catch(() => {});
+          await new Promise((r) => setTimeout(r, c.profile));
+          try { const { profile } = await dbg.sendCommand('Profiler.stop'); fs.writeFileSync(path.join(dir, 'debug-profile.json'), JSON.stringify(profile)); dbg.detach(); } catch (e) { fs.writeFileSync(path.join(dir, 'debug-js.txt'), 'profiler stop: ' + e.message); }
+          c.js = null;
         }
         if (c.js) {
           const r = await island.webContents.executeJavaScript(c.js).catch((e) => 'ERR ' + e.message);
@@ -671,9 +778,23 @@ app.whenReady().then(() => {
   const dataDir = storeMod.dir();
 
   services.clips = createClipboard({ store: S.clips, dataDir, emit: send });
-  services.downloads = createDownloads({ getDir: () => S.settings.data.downloadsDir, emit: send });
+  // a finished download comes with the file's own icon (an .exe shows its logo, a .zip the archive icon...)
+  // Browser downloads and files coming from the phone share one list on the island.
+  let dlList = [], phoneList = [];
+  const dlEmit = async (ch, d) => {
+    if (ch === 'downloads') { dlList = d; return send('downloads', [...phoneList, ...dlList]); }
+    if (ch === 'phone-uploads') { phoneList = d; return send('downloads', [...phoneList, ...dlList]); }
+    if (ch === 'download-done' && !d.folder) try { d = { ...d, icon: (await app.getFileIcon(d.path, { size: 'large' })).toDataURL() }; } catch {}
+    send(ch, d);
+  };
+  services.downloads = createDownloads({ getDir: () => S.settings.data.downloadsDir, emit: dlEmit });
+  services.phone = createPhone({ helper, state: { dir: app.getPath('userData') }, picturesDir: () => app.getPath('pictures'), emit: dlEmit, notify, log: (m) => fs.appendFile(path.join(app.getPath('userData'), 'island.log'), `${new Date().toISOString()} ${m}\n`, () => {}) });
+  if (S.settings.data.phone?.enabled !== false) services.phone.start();
   services.weather = createWeather({ settings: S.settings, emit: send, notify });
-  services.media = createMedia({ emit: send, onVoiceStart: () => services.telegram?.guessVoice(), callProcs: () => services.calls?.procs() || [], log: (m) => fs.appendFile(path.join(app.getPath('userData'), 'island.log'), `${new Date().toISOString()} ${m}\n`, () => {}) });
+  services.games = createGames({ emit: send, helper, log: (m) => fs.appendFile(path.join(app.getPath('userData'), 'island.log'), `${new Date().toISOString()} ${m}
+`, () => {}) });
+  services.games.start();
+  services.media = createMedia({ emit: send, onVoiceStart: () => services.telegram?.guessVoice(), callProcs: () => services.calls?.procs() || [], gameProcs: () => services.games?.procs() || [], looksLikeGame: (n) => services.games?.looksLikeGame(n), log: (m) => fs.appendFile(path.join(app.getPath('userData'), 'island.log'), `${new Date().toISOString()} ${m}\n`, () => {}) });
   services.ai = createAI({ settings: S.settings });
   services.agents = createAgents({
     settings: S.settings, dataDir, emit: (ch, p) => {
@@ -687,6 +808,7 @@ app.whenReady().then(() => {
     onVoice: (v) => services.media.setVoice(v), // who sent the voice message that is playing
   });
   services.calls = createCalls({ emit: send, notify });
+  services.account = createAccount({ emit: (ch, p) => sendAll(ch, p) }); // profile + subscription
   const toasts = sys.createToastWatcher({ state: S.state, emit: notify, enabled: () => S.settings.data.notifications.windows });
 
   // System audio loopback for the beat-reactive edge.
@@ -703,6 +825,7 @@ app.whenReady().then(() => {
   services.agents.start();
   toasts.start();
   services.calls.start();
+  services.account.start();
   if (S.settings.data.telegram?.session) services.telegram.start(); // also for voice-message names, even with notifications off
   startPolling();
   applySettings();

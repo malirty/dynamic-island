@@ -24,17 +24,19 @@ function flash(t) {
 }
 
 const init = await api.invoke('init');
-Object.assign(state, { settings: init.settings, providers: init.providers, agentsInstalled: init.agentsInstalled, telegram: init.telegram, weather: init.weather });
+Object.assign(state, { settings: init.settings, providers: init.providers, agentsInstalled: init.agentsInstalled, telegram: init.telegram, weather: init.weather, account: init.account });
 theme(state.settings);
 // our own saves update `state.settings` in place; changes from the island arrive here
 api.on('settings', (s) => { for (const k of Object.keys(s)) state.settings[k] = s[k]; theme(state.settings); bus.emit('settings', state.settings); bus.emit('settings-external'); });
 bus.on('settings', () => theme(state.settings));
 api.on('weather', (w) => { state.weather = w; });
 api.on('telegram-login', (l) => bus.emit('telegram-login', l));
+api.on('account', (a) => { state.account = a; bus.emit('account', a); });
 api.on('telegram-status', (s) => bus.emit('telegram-status', s));
 
 document.getElementById('close').onclick = () => api.invoke('win:close');
 document.getElementById('min').onclick = () => api.invoke('win:minimize');
+document.getElementById('max').onclick = () => api.invoke('win:maximize');
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !e.target.closest('input, textarea')) api.invoke('win:close'); });
 
 const section = new URLSearchParams(location.search).get('section');
